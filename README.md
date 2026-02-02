@@ -6,7 +6,7 @@
 
 ```bash
 # Télécharger et lancer l'installateur
-curl -sSL https://raw.githubusercontent.com/user/semantic-search-mcp/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/install.sh | bash
 ```
 
 ## Utilisation
@@ -41,7 +41,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 
 ```
 .
-├── src/            # Code source du serveur et CLI
+├── semantic_search_mcp/ # Code source du serveur et CLI
 ├── docs/           # Documentation
 ├── README.md       # Ce fichier
 └── install.sh      # Script d'installation
@@ -52,7 +52,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 | Commande | Description |
 |----------|-------------|
 | `semcp` | Configure le dossier courant comme cible de recherche |
-| `mcp-server` | Lance le serveur MCP (interne) |
+| `semantic_search_mcp` | Lance le serveur MCP (interne) |
 
 ## Scripts exécutables secondaires & Utilitaires
 

@@ -124,7 +124,7 @@ async def handle_call_tool(
         )
     ]
 
-async def main():
+async def run():
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
@@ -139,5 +139,8 @@ async def main():
             ),
         )
 
+def main():
+    asyncio.run(run())
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
