@@ -16,7 +16,10 @@ curl -sSL https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/inst
    ```bash
    semcp
    ```
-   Cela va indexer le code (en utilisant le GPU si dispo), configurer l'accès MCP et surveiller les changements en temps réel.
+   Cela va :
+   - Indexer le code dans un dossier local `.semcp/` (ajouté automatiquement au `.gitignore`).
+   - Configurer le serveur MCP pour ce dossier spécifique.
+   - Surveiller les changements en temps réel.
 
 2. **Recherche sémantique** :
    L'agent pourra alors utiliser l'outil `semsearch` via l'interface MCP.
@@ -35,7 +38,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 
 | Titre | Description |
 |-------|-------------|
-| [Tâches](docs/tasks/README.md) | Index des tâches techniques |
+| [Tâches](docs/index_tasks.md) | Index des tâches techniques |
 
 ## Plan du repo
 
@@ -63,3 +66,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Initialisation du Projet](docs/tasks/setup_project.md)
 - [x] [Implémentation CLI semcp](docs/tasks/implement_cli.md)
 - [x] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
+- [x] [Migration Index Local](docs/tasks/migrate_to_local_index.md)
