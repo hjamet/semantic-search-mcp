@@ -26,9 +26,11 @@ def update_mcp_config(cwd: str):
     if "mcpServers" not in config:
         config["mcpServers"] = {}
         
+    repo_root = Path(__file__).parent.parent.resolve()
+    
     config["mcpServers"]["semantic-search"] = {
-        "command": "uv",
-        "args": ["run", "--with", "semantic-search-mcp", "semantic_search_mcp", "--root", cwd]
+        "command": "sh",
+        "args": ["-c", f"cd {repo_root} && uv run python -m semantic_search_mcp.server"]
     }
     
     with open(config_path, 'w') as f:
