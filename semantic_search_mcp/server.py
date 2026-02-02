@@ -43,12 +43,12 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="semsearch",
-            description="Effectuer une recherche sémantique dans la codebase.",
+            description="Perform a semantic search across the codebase. SUGGESTION: Use this tool at the START of every conversation to gain context on the repository structure and relevant files. It returns a tree of matches, top file paths, and code snippets.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "La prompt de recherche sémantique (ex: 'où est géré l'auth ?')"},
-                    "glob": {"type": "string", "description": "Filtre optionnel sur les fichiers ou dossiers (ex: 'src/*.py')"}
+                    "query": {"type": "string", "description": "The natural language query describing what functionality or logic you are looking for (e.g., 'where is authentication handled?')."},
+                    "glob": {"type": "string", "description": "Optional glob pattern to filter files (e.g., 'src/*.py')."}
                 },
                 "required": ["query"],
             },

@@ -10,3 +10,4 @@ Ce dossier contient les spécifications des tâches techniques réalisées sur l
 | [Optimisation Indexation](tasks/optimize_indexing.md) | Indexation incrémentale | 2026-02-02 | `Up to date` |
 | [Migration Index Local](tasks/migrate_to_local_index.md) | Migration vers .semcp local | 2026-02-02 | `Up to date` |
 | [Fix Install Script](tasks/fix_install_script.md) | Correction install dependencies | 2026-02-02 | `Up to date` |
+| [Enhance Tool Description](tasks/enhance_tool_description.md) | Amélioration description outil | 2026-02-02 | `Up to date` |
