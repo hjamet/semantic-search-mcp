@@ -20,8 +20,12 @@ class SemanticEngine:
         # Model selection: BGE-small-en-v1.5 is fast and efficient
         self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
         
-        self.client = QdrantClient(path=str(self.storage_path / "qdrant"))
+        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        
         self._setup_collection()
+
+    def _get_client(self) -> QdrantClient:
+        return QdrantClient(path=str(self.storage_path / "qdrant"))
 
     def _has_cuda(self) -> bool:
         try:
@@ -32,11 +36,15 @@ class SemanticEngine:
             return False
 
     def _setup_collection(self):
-        if not self.client.collection_exists("code_chunks"):
-            self.client.create_collection(
-                collection_name="code_chunks",
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-            )
+        client = self._get_client()
+        try:
+            if not client.collection_exists("code_chunks"):
+                client.create_collection(
+                    collection_name="code_chunks",
+                    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+                )
+        finally:
+            client.close()
 
     def chunk_text(self, text: str, file_path: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
         """Simple chunking with line tracking."""
@@ -100,24 +108,36 @@ class SemanticEngine:
                 ))
             
             # Upsert points
-            self.client.upsert(collection_name="code_chunks", points=points)
+            client = self._get_client()
+            try:
+                client.upsert(collection_name="code_chunks", points=points)
+            finally:
+                client.close()
             
         except Exception as e:
             print(f"Error indexing {file_path}: {e}")
 
     def delete_file(self, file_path: str):
         relative_path = os.path.relpath(file_path, os.getcwd())
-        self.client.delete(
-            collection_name="code_chunks",
-            points_selector={"payload": {"file_path": relative_path}}
-        )
+        client = self._get_client()
+        try:
+            client.delete(
+                collection_name="code_chunks",
+                points_selector={"payload": {"file_path": relative_path}}
+            )
+        finally:
+            client.close()
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         query_vector = list(self.model.embed([query]))[0]
-        results = self.client.query_points(
-            collection_name="code_chunks",
-            query=query_vector.tolist(),
-            limit=limit,
-            with_payload=True
-        ).points
-        return [hit.payload for hit in results]
+        client = self._get_client()
+        try:
+            results = client.query_points(
+                collection_name="code_chunks",
+                query=query_vector.tolist(),
+                limit=limit,
+                with_payload=True
+            ).points
+            return [hit.payload for hit in results]
+        finally:
+            client.close()

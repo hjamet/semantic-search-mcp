@@ -60,6 +60,6 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 
 ## Roadmap
 
-- [ ] [Initialisation du Projet](docs/tasks/setup_project.md)
-- [ ] [Implémentation CLI semcp](docs/tasks/implement_cli.md)
-- [ ] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
+- [x] [Initialisation du Projet](docs/tasks/setup_project.md)
+- [x] [Implémentation CLI semcp](docs/tasks/implement_cli.md)
+- [x] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
