@@ -29,13 +29,39 @@ def update_mcp_config(cwd: str):
     repo_root = Path(__file__).parent.parent.resolve()
     
     config["mcpServers"]["semantic-search"] = {
-        "command": "sh",
-        "args": ["-c", f"cd {repo_root} && uv run python -m semantic_search_mcp.server"]
+        "command": "uv",
+        "args": ["run", "python", "-m", "semantic_search_mcp.server"],
+        "cwd": repo_root.as_posix(), # Keep the server running from the code root
+        "env": {
+            "SEMANTIC_SEARCH_ROOT": cwd # Tell the server where the index is
+        }
     }
     
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
-    console.print(f"[dim]Updated {config_path}[/]")
+    console.print(f"[dim]Updated {config_path} with SEMANTIC_SEARCH_ROOT={cwd}[/]")
+
+def ensure_gitignore(cwd: str):
+    gitignore_path = Path(cwd) / ".gitignore"
+    if not gitignore_path.exists():
+        # Optional: create if not exists? For now let's just warn or create.
+        # Let's create it if it doesn't exist, it's standard.
+        with open(gitignore_path, "w") as f:
+            f.write(".semcp\n")
+        console.print("[dim]Created .gitignore with .semcp[/]")
+        return
+
+    with open(gitignore_path, "r") as f:
+        content = f.read()
+    
+    if ".semcp" not in content:
+        # Check if we have a newline at the end
+        if content and not content.endswith("\n"):
+            content += "\n"
+        content += ".semcp\n"
+        with open(gitignore_path, "w") as f:
+            f.write(content)
+        console.print("[dim]Added .semcp to .gitignore[/]")
 
 @app.command()
 def main():
@@ -46,7 +72,10 @@ def main():
     # Mise à jour de la config MCP
     update_mcp_config(cwd)
     
-    engine = SemanticEngine()
+    # Ensure .gitignore has .semcp
+    ensure_gitignore(cwd)
+    
+    engine = SemanticEngine(repo_path=cwd)
     
     # 1. Scan initial
     files_to_index = []

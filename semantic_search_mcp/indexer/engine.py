@@ -7,8 +7,22 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 from pathlib import Path
 
 class SemanticEngine:
-    def __init__(self, storage_path: str = "~/.semcp"):
-        self.storage_path = Path(storage_path).expanduser()
+    def __init__(self, repo_path: Optional[str] = None):
+        """
+        Initialize the SemanticEngine.
+        
+        Args:
+            repo_path: The root directory of the repository to index. 
+                      If None, tries to read SEMANTIC_SEARCH_ROOT env var.
+        """
+        if repo_path:
+            self.repo_path = Path(repo_path).resolve()
+        elif os.getenv("SEMANTIC_SEARCH_ROOT"):
+            self.repo_path = Path(os.getenv("SEMANTIC_SEARCH_ROOT")).resolve()
+        else:
+            raise ValueError("No repo_path provided and SEMANTIC_SEARCH_ROOT not set.")
+            
+        self.storage_path = self.repo_path / ".semcp"
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
         # Detection GPU

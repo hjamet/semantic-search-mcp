@@ -65,8 +65,12 @@ async def handle_call_tool(
     query = arguments.get("query")
     glob_pattern = arguments.get("glob")
     
-    # Correction: On utilise un singleton ou on l'initialise ici (lecture seule)
-    engine = SemanticEngine()
+    try:
+        # On utilise un singleton ou on l'initialise ici (lecture seule)
+        # L'engine va lire SEMANTIC_SEARCH_ROOT de l'environnement
+        engine = SemanticEngine()
+    except ValueError as e:
+        return [types.TextContent(type="text", text=f"Error: {str(e)}. Please run 'semcp' in the target directory to configure the index.")]
     
     # On récupère plus de chunks pour pouvoir agréger les lignes par fichier
     raw_results = engine.search(query, limit=50)
