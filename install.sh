@@ -14,7 +14,7 @@ fi
 
 # 2. Install the package
 echo "🛠️ Installing package..."
-uv tool install . --force
+uv tool install git+https://github.com/hjamet/semantic-search-mcp --force
 
 # 3. Create config directory
 mkdir -p ~/.semcp

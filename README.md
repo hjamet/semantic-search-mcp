@@ -70,3 +70,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
 - [x] [Migration Index Local](docs/tasks/migrate_to_local_index.md)
 - [x] [Optimisation Indexation](docs/tasks/optimize_indexing.md)
+- [x] [Fix Install Script](docs/tasks/fix_install_script.md)
