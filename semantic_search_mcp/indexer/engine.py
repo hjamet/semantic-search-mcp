@@ -114,9 +114,10 @@ class SemanticEngine:
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         query_vector = list(self.model.embed([query]))[0]
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name="code_chunks",
-            query_vector=query_vector.tolist(),
-            limit=limit
-        )
+            query=query_vector.tolist(),
+            limit=limit,
+            with_payload=True
+        ).points
         return [hit.payload for hit in results]
