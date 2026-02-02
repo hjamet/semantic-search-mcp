@@ -30,7 +30,7 @@ def update_mcp_config(cwd: str):
     
     config["mcpServers"]["semantic-search"] = {
         "command": "uv",
-        "args": ["run", "python", "-m", "semantic_search_mcp.server"],
+        "args": ["--directory", repo_root.as_posix(), "run", "python", "-m", "semantic_search_mcp.server"],
         "cwd": repo_root.as_posix(), # Keep the server running from the code root
         "env": {
             "SEMANTIC_SEARCH_ROOT": cwd # Tell the server where the index is
