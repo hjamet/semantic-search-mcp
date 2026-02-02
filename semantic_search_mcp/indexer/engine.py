@@ -36,7 +36,29 @@ class SemanticEngine:
         
         self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
         
+        # Metadata storage
+        self.metadata_path = self.storage_path / "index_metadata.json"
+        self.metadata = self._load_metadata()
+        
         self._setup_collection()
+
+    def _load_metadata(self) -> Dict[str, float]:
+        import json
+        if self.metadata_path.exists():
+            try:
+                with open(self.metadata_path, 'r') as f:
+                    return json.load(f)
+            except:
+                return {}
+        return {}
+
+    def _save_metadata(self):
+        import json
+        with open(self.metadata_path, 'w') as f:
+            json.dump(self.metadata, f, indent=2)
+
+    def get_metadata(self) -> Dict[str, float]:
+        return self.metadata.copy()
 
     def _get_client(self) -> QdrantClient:
         return QdrantClient(path=str(self.storage_path / "qdrant"))
@@ -108,6 +130,8 @@ class SemanticEngine:
             chunks = self.chunk_text(content, relative_path)
             
             if not chunks:
+                self.metadata[relative_path] = os.path.getmtime(file_path)
+                self._save_metadata()
                 return
 
             contents = [c["content"] for c in chunks]
@@ -128,6 +152,10 @@ class SemanticEngine:
             finally:
                 client.close()
             
+            # Update metadata
+            self.metadata[relative_path] = os.path.getmtime(file_path)
+            self._save_metadata()
+            
         except Exception as e:
             print(f"Error indexing {file_path}: {e}")
 
@@ -141,6 +169,10 @@ class SemanticEngine:
             )
         finally:
             client.close()
+            
+        if relative_path in self.metadata:
+            del self.metadata[relative_path]
+            self._save_metadata()
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         query_vector = list(self.model.embed([query]))[0]

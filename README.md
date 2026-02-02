@@ -29,6 +29,8 @@ curl -sSL https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/inst
 Ce projet fournit une interface standardisée pour la recherche sémantique locale.
 - **Rôle** : Indexer et rechercher dans le code.
 - **Flux** : L'utilisateur lance `semcp` dans un dossier -> Le serveur MCP se reconfigure -> L'agent utilise l'outil `semsearch`.
+- **Performance** : Utilise une indexation incrémentale pour ne traiter que les changements fichiers (timestamps).
+
 
 ## Principaux résultats
 
@@ -67,3 +69,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Implémentation CLI semcp](docs/tasks/implement_cli.md)
 - [x] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
 - [x] [Migration Index Local](docs/tasks/migrate_to_local_index.md)
+- [x] [Optimisation Indexation](docs/tasks/optimize_indexing.md)

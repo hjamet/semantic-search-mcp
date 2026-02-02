@@ -78,7 +78,7 @@ def main():
     engine = SemanticEngine(repo_path=cwd)
     
     # 1. Scan initial
-    files_to_index = []
+    current_files = {} # path -> mtime
     ignored_dirs = [".git", "__pycache__", ".venv", ".semcp", ".semsearch", "node_modules"]
     
     for root, dirs, files in os.walk(cwd):
@@ -86,13 +86,38 @@ def main():
         dirs[:] = [d for d in dirs if d not in ignored_dirs]
         for file in files:
             if file.endswith((".py", ".md", ".js", ".ts", ".c", ".cpp", ".h", ".go", ".rs")):
-                files_to_index.append(os.path.join(root, file))
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, cwd)
+                current_files[rel_path] = os.path.getmtime(full_path)
     
-    with Progress() as progress:
-        task = progress.add_task("[green]Indexation initiale...", total=len(files_to_index))
-        for file_path in files_to_index:
-            engine.index_file(file_path)
-            progress.update(task, advance=1)
+    # Check against metadata
+    metadata = engine.get_metadata()
+    
+    files_to_index = []
+    files_to_delete = []
+    
+    for rel_path, mtime in current_files.items():
+        if rel_path not in metadata or metadata[rel_path] < mtime:
+            files_to_index.append(os.path.join(cwd, rel_path))
+            
+    for rel_path in metadata:
+        if rel_path not in current_files:
+            files_to_delete.append(os.path.join(cwd, rel_path))
+            
+    if not files_to_index and not files_to_delete:
+         console.print("[dim]No changes detected.[/]")
+    else:
+        if files_to_delete:
+            console.print(f"[yellow]Removing {len(files_to_delete)} deleted files...[/]")
+            for f in files_to_delete:
+                engine.delete_file(f)
+                
+        if files_to_index:
+            with Progress() as progress:
+                task = progress.add_task(f"[green]Indexing {len(files_to_index)} changes...", total=len(files_to_index))
+                for file_path in files_to_index:
+                    engine.index_file(file_path)
+                    progress.update(task, advance=1)
             
     console.print("[bold green]✅ Indexation terminée. En attente de changements...[/]")
     
