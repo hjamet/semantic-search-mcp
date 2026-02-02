@@ -1,4 +1,12 @@
-# Cursor Memory Bank
-.cursor/mcp
-.cursor/mcp.json
-.cursor/screenshots
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+build/
+dist/
+*.egg-info/
+.semsearch/
+.semcp/
+.vscode/
+.idea/
+.DS_Store
