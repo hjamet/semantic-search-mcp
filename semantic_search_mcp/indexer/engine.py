@@ -2,7 +2,7 @@ import os
 from typing import List, Dict, Any, Optional
 import numpy as np
 from fastembed import TextEmbedding
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from pathlib import Path
 
@@ -165,7 +165,14 @@ class SemanticEngine:
         try:
             client.delete(
                 collection_name="code_chunks",
-                points_selector={"payload": {"file_path": relative_path}}
+                points_selector=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="file_path",
+                            match=models.MatchValue(value=relative_path)
+                        )
+                    ]
+                )
             )
         finally:
             client.close()
