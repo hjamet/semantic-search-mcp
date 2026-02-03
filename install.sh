@@ -3,6 +3,10 @@
 # Semantic Search MCP Installer
 set -e
 
+INSTALL_DIR="$HOME/.semcp"
+VENV_DIR="$INSTALL_DIR/.venv"
+BIN_DIR="$HOME/.local/bin"
+
 echo "🚀 Installing Semantic Search MCP..."
 
 # 1. Check for uv
@@ -12,17 +16,39 @@ if ! command -v uv &> /dev/null; then
     source $HOME/.cargo/env
 fi
 
-# 2. Install the package
-echo "🛠️ Installing package..."
-uv tool install . --force
+# 2. Determine Source
+if [ -f "pyproject.toml" ] && grep -q "name = \"semantic-search-mcp\"" pyproject.toml; then
+    SOURCE="."
+    echo "📍 Detected local source."
+else
+    SOURCE="git+https://github.com/hjamet/semantic-search-mcp"
+    echo "🌐 Using remote source: $SOURCE"
+fi
 
-# 3. Create config directory
-mkdir -p ~/.semcp
+# 3. Create/Update Venv
+echo "🛠️  Setting up environment in $VENV_DIR..."
+mkdir -p "$INSTALL_DIR"
+uv venv "$VENV_DIR" --python 3.10 --seed
 
-# 4. Register in MCP Config
+echo "📦 Installing specific dependencies..."
+# Force install dependencies in the venv
+uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
+
+# 4. Create Symlinks
+echo "🔗 Creating symlinks in $BIN_DIR..."
+mkdir -p "$BIN_DIR"
+
+# Remove old symlinks/binaries if they exist
+rm -f "$BIN_DIR/semcp"
+rm -f "$BIN_DIR/semantic_search_mcp"
+
+ln -s "$VENV_DIR/bin/semcp" "$BIN_DIR/semcp"
+ln -s "$VENV_DIR/bin/semantic_search_mcp" "$BIN_DIR/semantic_search_mcp"
+
+# 5. Register in MCP Config
 echo "⚙️  Configuring MCP server..."
 MCP_CONFIG_PATH="$HOME/.gemini/antigravity/mcp_config.json"
-BIN_PATH="$HOME/.local/bin/semantic_search_mcp"
+MCP_BIN_PATH="$VENV_DIR/bin/semantic_search_mcp"
 
 if [ -f "$MCP_CONFIG_PATH" ]; then
     # Create temp python script to safely edit JSON
@@ -32,7 +58,7 @@ import os
 from pathlib import Path
 
 config_path = "$MCP_CONFIG_PATH"
-bin_path = "$BIN_PATH"
+bin_path = "$MCP_BIN_PATH"
 
 try:
     with open(config_path, 'r') as f:
@@ -60,9 +86,12 @@ else
     echo "Warning: mcp_config.json not found at $MCP_CONFIG_PATH"
 fi
 
+echo ""
 echo "✅ Installation complete!"
+echo "   - Environment: $VENV_DIR"
+echo "   - Binaries: $BIN_DIR/semcp"
 echo ""
 echo "Pour commencer :"
-echo "1. Redémarrez votre IDE/MCP host (une dernière fois)."
+echo "1. Redémarrez votre IDE/MCP host."
 echo "2. Allez à la racine d'un repo."
 echo "3. Lancez 'semcp'."
