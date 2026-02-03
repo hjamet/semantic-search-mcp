@@ -5,7 +5,7 @@
 ## Installation
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/install.sh?v=123 | bash
 ```
 
 > **Note**: Assurez-vous d'avoir `uv` installé. Si non, le script l'installera pour vous.
