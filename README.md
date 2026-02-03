@@ -5,24 +5,34 @@
 ## Installation
 
 ```bash
-# Télécharger et lancer l'installateur
-curl -sSL https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/install.sh | bash
 ```
+
+> **Note**: Assurez-vous d'avoir `uv` installé. Si non, le script l'installera pour vous.
 
 ## Utilisation
 
-1. **Indexer un repository** :
-   Allez dans n'importe quel dossier et lancez :
+### 1. Indexation & Context Switch (CLI)
+
+Pour utiliser le serveur sur un repo spécifique :
+
+1. Ouvrez votre terminal à la racine du projet.
+2. Lancez :
    ```bash
    semcp
    ```
-   Cela va :
-   - Indexer le code dans un dossier local `.semcp/` (ajouté automatiquement au `.gitignore`).
-   - Configurer le serveur MCP pour ce dossier spécifique.
-   - Surveiller les changements en temps réel.
+3. C'est tout ! Le contexte est mis à jour instantanément. Le serveur MCP lira ce contexte à la prochaine requête.
 
-2. **Recherche sémantique** :
-   L'agent pourra alors utiliser l'outil `semsearch` via l'interface MCP.
+> **Important** : L'outil `semcp` doit être relancé si vous changez de projet (changement de contexte).
+
+### 2. Recherche (MCP Tool)
+
+Dans votre agent (Cursor, Claude, etc.), vous avez accès à l'outil :
+
+- **`semsearch`** : Effectue une recherche sémantique.
+  - **MANDATORY** : Utilisez cet outil au début de chaque tâche pour comprendre la structure du code.
+  - *Query* : "How is authentication handled?"
+  - *Glob* : "src/*.py" (optionnel)
 
 ## Description détaillée
 
@@ -65,6 +75,8 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 
 ## Roadmap
 
+## Roadmap
+
 - [x] [Initialisation du Projet](docs/tasks/setup_project.md)
 - [x] [Implémentation CLI semcp](docs/tasks/implement_cli.md)
 - [x] [Implémentation Serveur MCP](docs/tasks/implement_server.md)
@@ -72,3 +84,5 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Optimisation Indexation](docs/tasks/optimize_indexing.md)
 - [x] [Fix Install Script](docs/tasks/fix_install_script.md)
 - [x] [Enhance Tool Description](docs/tasks/enhance_tool_description.md)
+- [x] Gestion dynamique du contexte
+- [x] Installation simplifiée via uv tool local

@@ -10,36 +10,26 @@ from semantic_search_mcp.indexer.watcher import start_watcher
 app = typer.Typer()
 console = Console()
 
-def update_mcp_config(cwd: str):
-    config_path = Path("~/.gemini/antigravity/mcp_config.json").expanduser()
-    if not config_path.parent.exists():
-        config_path.parent.mkdir(parents=True, exist_ok=True)
+def update_context_file(cwd: str):
+    settings_dir = Path("~/.semcp").expanduser()
+    if not settings_dir.exists():
+        settings_dir.mkdir(parents=True, exist_ok=True)
         
-    config = {}
-    if config_path.exists():
+    settings_path = settings_dir / "settings.json"
+    
+    settings = {}
+    if settings_path.exists():
         try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
         except:
             pass
             
-    if "mcpServers" not in config:
-        config["mcpServers"] = {}
-        
-    repo_root = Path(__file__).parent.parent.resolve()
+    settings["current_context"] = cwd
     
-    config["mcpServers"]["semantic-search"] = {
-        "command": "uv",
-        "args": ["--directory", repo_root.as_posix(), "run", "python", "-m", "semantic_search_mcp.server"],
-        "cwd": repo_root.as_posix(), # Keep the server running from the code root
-        "env": {
-            "SEMANTIC_SEARCH_ROOT": cwd # Tell the server where the index is
-        }
-    }
-    
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    console.print(f"[dim]Updated {config_path} with SEMANTIC_SEARCH_ROOT={cwd}[/]")
+    with open(settings_path, 'w') as f:
+        json.dump(settings, f, indent=2)
+    console.print(f"[dim]Updated context in[/] {settings_path}")
 
 def ensure_gitignore(cwd: str):
     gitignore_path = Path(cwd) / ".gitignore"
@@ -69,8 +59,8 @@ def main():
     cwd = os.getcwd()
     console.print(f"[bold blue]🚀 Initialisation de Semantic Search pour :[/] {cwd}")
     
-    # Mise à jour de la config MCP
-    update_mcp_config(cwd)
+    # Mise à jour du context
+    update_context_file(cwd)
     
     # Ensure .gitignore has .semcp
     ensure_gitignore(cwd)

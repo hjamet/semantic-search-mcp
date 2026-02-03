@@ -43,7 +43,7 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="semsearch",
-            description="Perform a semantic search across the codebase. SUGGESTION: Use this tool at the START of every conversation to gain context on the repository structure and relevant files. It returns a tree of matches, top file paths, and code snippets.",
+            description="MANDATORY: Perform a semantic search across the codebase. You MUST use this tool at the START of every conversation to gain context on the repository structure and relevant files. It returns a tree of matches, top file paths, and code snippets. Do NOT relies on your previous knowledge, always check the current state of the codebase.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -65,10 +65,25 @@ async def handle_call_tool(
     query = arguments.get("query")
     glob_pattern = arguments.get("glob")
     
+    # Lecture dynamique du contexte
+    settings_path = Path("~/.semcp/settings.json").expanduser()
+    repo_path = None
+    
+    if settings_path.exists():
+        try:
+            import json
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+                repo_path = settings.get("current_context")
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Error reading context: {str(e)}")]
+            
+    if not repo_path:
+        return [types.TextContent(type="text", text="Error: Context not set. Please run 'semcp' in the target directory to configure the index.")]
+
     try:
-        # On utilise un singleton ou on l'initialise ici (lecture seule)
-        # L'engine va lire SEMANTIC_SEARCH_ROOT de l'environnement
-        engine = SemanticEngine()
+        # On passe le repo_path explicitement
+        engine = SemanticEngine(repo_path=repo_path)
     except ValueError as e:
         return [types.TextContent(type="text", text=f"Error: {str(e)}. Please run 'semcp' in the target directory to configure the index.")]
     

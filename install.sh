@@ -14,14 +14,55 @@ fi
 
 # 2. Install the package
 echo "🛠️ Installing package..."
-uv tool install git+https://github.com/hjamet/semantic-search-mcp --force
+uv tool install . --force
 
 # 3. Create config directory
 mkdir -p ~/.semcp
 
+# 4. Register in MCP Config
+echo "⚙️  Configuring MCP server..."
+MCP_CONFIG_PATH="$HOME/.gemini/antigravity/mcp_config.json"
+BIN_PATH="$HOME/.local/bin/semantic_search_mcp"
+
+if [ -f "$MCP_CONFIG_PATH" ]; then
+    # Create temp python script to safely edit JSON
+    cat <<EOF > update_config.py
+import json
+import os
+from pathlib import Path
+
+config_path = "$MCP_CONFIG_PATH"
+bin_path = "$BIN_PATH"
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    if "mcpServers" not in config:
+        config["mcpServers"] = {}
+        
+    config["mcpServers"]["semantic-search"] = {
+        "command": bin_path,
+        "args": [],
+        "env": {}
+    }
+    
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+    print("Updated mcp_config.json")
+except Exception as e:
+    print(f"Error updating config: {e}")
+EOF
+    
+    python3 update_config.py
+    rm update_config.py
+else
+    echo "Warning: mcp_config.json not found at $MCP_CONFIG_PATH"
+fi
+
 echo "✅ Installation complete!"
 echo ""
 echo "Pour commencer :"
-echo "1. Allez à la racine d'un repo."
-echo "2. Lancez 'semcp'."
-echo "3. Redémarrez votre IDE/MCP host."
+echo "1. Redémarrez votre IDE/MCP host (une dernière fois)."
+echo "2. Allez à la racine d'un repo."
+echo "3. Lancez 'semcp'."
