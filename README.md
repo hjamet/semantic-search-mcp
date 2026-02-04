@@ -84,5 +84,6 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Optimisation Indexation](docs/tasks/optimize_indexing.md)
 - [x] [Fix Install Script](docs/tasks/fix_install_script.md)
 - [x] [Enhance Tool Description](docs/tasks/enhance_tool_description.md)
+- [x] [Refine Tool Description](docs/tasks/refine_tool_description.md)
 - [x] Gestion dynamique du contexte
 - [x] Installation simplifiée via uv tool local

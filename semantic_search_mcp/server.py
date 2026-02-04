@@ -43,12 +43,22 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="semsearch",
-            description="MANDATORY: Perform a semantic search across the codebase. You MUST use this tool at the START of every conversation to gain context on the repository structure and relevant files. It returns a tree of matches, top file paths, and code snippets. Do NOT relies on your previous knowledge, always check the current state of the codebase.",
+            description=(
+                "MANDATORY: Perform a semantic search across the codebase. "
+                "This is your PRIMARY and MOST POWERFUL tool for information gathering. "
+                "You are STRONGLY ENCOURAGED to use this tool AT LEAST 3 TIMES per conversation (e.g., 2 code searches + 1 doc search). "
+                "USE AND ABUSE this tool to: "
+                "1) Gain a deep, up-to-date understanding of the repository. "
+                "2) Find and REUSE existing code to avoid reinventing the wheel. "
+                "3) Prevent code duplication. "
+                "Do NOT rely on your previous knowledge; always check the current state of the codebase. "
+                "Use the 'glob' argument to filter for specific types, e.g., '*.md' for documentation or '*.py' for code logic."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The natural language query describing what functionality or logic you are looking for (e.g., 'where is authentication handled?')."},
-                    "glob": {"type": "string", "description": "Optional glob pattern to filter files (e.g., 'src/*.py')."}
+                    "glob": {"type": "string", "description": "Optional glob pattern to filter files. HIGHLY RECOMMENDED: use '*.md' to find relevant documentation or '*.py' to find code implementation."}
                 },
                 "required": ["query"],
             },
