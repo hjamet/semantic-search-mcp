@@ -6,6 +6,7 @@
 - 🎯 Visualisation interactive du graphe de dépendances dans le navigateur
 - ⚡ Mise à jour temps réel du graphe (WebSocket)
 - 🧠 **Analyseur intelligent** : Support du `TYPE_CHECKING`, imports relatifs complexes et fallbacks (try/except)
+- 🛡️ **Robustesse Qdrant** : Gestion automatique des verrous orphelins via détection de PID (blindage local)
 
 ## Installation
 
@@ -86,6 +87,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 | Titre | Description |
 |-------|-------------|
 | [Tâches](docs/index_tasks.md) | Index des tâches techniques |
+| [Dépannage](docs/index_troubleshooting.md) | Guide de résolution des problèmes courants |
 
 ## Plan du repo
 

@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import List, Dict, Any, Optional
 import numpy as np
 from fastembed import TextEmbedding
@@ -61,7 +62,78 @@ class SemanticEngine:
         return self.metadata.copy()
 
     def _get_client(self) -> QdrantClient:
-        return QdrantClient(path=str(self.storage_path / "qdrant"))
+        """Get a Qdrant client, with automatic orphan lock cleanup."""
+        storage_dir = self.storage_path / "qdrant"
+        lock_file = storage_dir / ".lock"
+        pid_file = self.storage_path / "qdrant.pid"
+
+        try:
+            client = QdrantClient(path=str(storage_dir))
+            # If successful, save our PID
+            with open(pid_file, "w") as f:
+                f.write(str(os.getpid()))
+            return client
+        except Exception as e:
+            error_msg = str(e)
+            if "already accessed" in error_msg.lower() or "lock" in error_msg.lower():
+                print(f"DEBUG: Qdrant lock detected. Checking if orphaned...")
+                if self._check_orphaned_lock(pid_file, lock_file):
+                    print(f"DEBUG: Orphaned lock cleaned. Retrying connection...")
+                    # Retry once
+                    client = QdrantClient(path=str(storage_dir))
+                    with open(pid_file, "w") as f:
+                        f.write(str(os.getpid()))
+                    return client
+            raise e
+
+    def _check_orphaned_lock(self, pid_file: Path, lock_file: Path) -> bool:
+        """
+        Check if a lock is held by a dead process. 
+        If so, clean up and return True.
+        """
+        if not pid_file.exists():
+            # If PID file doesn't exist but lock does, we are in a weird state
+            # but let's be conservative if we can't be sure who owns the lock.
+            if lock_file.exists():
+                print(f"WARNING: Lock file exists but no PID file found. Cleaning up.")
+                self._force_cleanup_lock(lock_file)
+                return True
+            return False
+
+        try:
+            with open(pid_file, "r") as f:
+                pid = int(f.read().strip())
+        except (ValueError, IOError):
+            print(f"WARNING: Corrupted PID file. Cleaning up.")
+            self._force_cleanup_lock(lock_file)
+            return True
+
+        if pid == os.getpid():
+            return False
+
+        # Check if process is alive
+        try:
+            os.kill(pid, 0)
+            # Process is still alive
+            return False
+        except OSError:
+            # Process is dead
+            print(f"INFO: Detected orphaned lock from PID {pid}. Cleaning up.")
+            self._force_cleanup_lock(lock_file)
+            if pid_file.exists():
+                pid_file.unlink()
+            return True
+
+    def _force_cleanup_lock(self, lock_file: Path):
+        """Forcefully remove the lock file."""
+        if lock_file.exists():
+            try:
+                if lock_file.is_dir():
+                    shutil.rmtree(lock_file)
+                else:
+                    lock_file.unlink()
+            except Exception as e:
+                print(f"ERROR: Could not remove lock file: {e}")
 
     def _has_cuda(self) -> bool:
         """
