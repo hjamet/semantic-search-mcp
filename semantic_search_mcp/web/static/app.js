@@ -73,7 +73,6 @@ function getNodeColor(node) {
 }
 
 function getNodeSize(node) {
-    // Size based on connections
     const degree = node.degree();
     const base = node.data('important') ? 50 : 40;
     return Math.min(base + degree * 3, 80);
@@ -164,7 +163,7 @@ const cytoscapeStyle = [
             'border-width': 3
         }
     },
-    // Dimmed elements (not connected to highlighted)
+    // Dimmed elements
     {
         selector: 'node.dimmed',
         style: {
@@ -190,7 +189,7 @@ const cytoscapeStyle = [
             'z-index': 50
         }
     },
-    // Search result highlighted - other nodes dimmed
+    // Search dimmed
     {
         selector: 'node.search-dimmed',
         style: {
@@ -203,13 +202,6 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Hidden elements (filtered out)
-    {
-        selector: '.filtered-hidden',
-        style: {
-            'display': 'none'
-        }
-    },
     // Indirect connection (dashed edge)
     {
         selector: 'edge.indirect',
@@ -220,17 +212,11 @@ const cytoscapeStyle = [
             'target-arrow-color': 'rgba(129, 140, 248, 0.5)',
             'width': 1.5
         }
-    },
-    // Legacy search-result class (compatibility)
-    {
-        selector: 'node.search-result',
-        style: {
-            'border-color': '#22c55e',
-            'border-width': 4,
-            'z-index': 50
-        }
     }
 ];
+
+// Store original positions for layout restoration
+let originalPositions = null;
 
 // ============================================
 // Graph Initialization
@@ -280,6 +266,14 @@ async function initGraph() {
             wheelSensitivity: 0.3
         });
 
+        // Store original positions after layout
+        state.cy.one('layoutstop', () => {
+            originalPositions = {};
+            state.cy.nodes().forEach(node => {
+                originalPositions[node.id()] = { ...node.position() };
+            });
+        });
+
         // Track important nodes
         state.graph.nodes.forEach(node => {
             if (node.important) {
@@ -312,11 +306,7 @@ function setupEventHandlers() {
     state.cy.on('tap', 'node', async function (event) {
         const node = event.target;
         const nodeId = node.id();
-
-        // Highlight node and connections
         highlightNode(nodeId);
-
-        // Show file details
         await showFileDetails(nodeId);
     });
 
@@ -329,7 +319,7 @@ function setupEventHandlers() {
     });
 
     // Node hover
-    state.cy.on('mouseover', 'node', function (event) {
+    state.cy.on('mouseover', 'node', function () {
         document.body.style.cursor = 'pointer';
     });
 
@@ -383,6 +373,43 @@ function setupEventHandlers() {
 
     // Important button
     document.getElementById('mark-important-btn').addEventListener('click', toggleImportant);
+
+    // Sidebar resize
+    setupSidebarResize();
+}
+
+// ============================================
+// Sidebar Resize
+// ============================================
+
+function setupSidebarResize() {
+    const sidebar = document.getElementById('sidebar');
+    const handle = document.getElementById('resize-handle');
+    let isResizing = false;
+
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        handle.classList.add('resizing');
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const newWidth = Math.max(280, Math.min(600, e.clientX));
+        sidebar.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            handle.classList.remove('resizing');
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = '';
+            // Resize the graph container
+            state.cy.resize();
+        }
+    });
 }
 
 // ============================================
@@ -402,11 +429,21 @@ function setFilter(filter) {
 }
 
 function applyFilter() {
-    // Remove all filter classes first
-    state.cy.elements().removeClass('filtered-hidden indirect');
+    // First, show all elements and remove classes
+    state.cy.elements().style('display', 'element');
+    state.cy.elements().removeClass('indirect');
 
     if (state.currentFilter === 'all') {
-        // Show everything
+        // Restore original positions
+        if (originalPositions) {
+            state.cy.nodes().forEach(node => {
+                const pos = originalPositions[node.id()];
+                if (pos) {
+                    node.position(pos);
+                }
+            });
+        }
+        state.cy.fit(undefined, 50);
         return;
     }
 
@@ -420,104 +457,103 @@ function applyFilter() {
     }
 
     if (visibleNodeIds.size === 0) {
-        // No nodes match the filter
-        state.cy.nodes().addClass('filtered-hidden');
-        state.cy.edges().addClass('filtered-hidden');
+        // No nodes match the filter - show message via empty state
+        state.cy.elements().style('display', 'none');
         return;
     }
 
-    // Find shortest paths between all visible nodes
-    const connectedNodeIds = new Set(visibleNodeIds);
-    const directEdges = new Set();
-    const indirectEdges = new Set();
+    // Hide non-visible nodes
+    state.cy.nodes().forEach(node => {
+        if (!visibleNodeIds.has(node.id())) {
+            node.style('display', 'none');
+        }
+    });
 
-    // For each pair of visible nodes, check if there's a connection
+    // Process edges - show direct edges, mark indirect connections
     const visibleArray = Array.from(visibleNodeIds);
+    const directConnections = new Set();
+
+    state.cy.edges().forEach(edge => {
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+
+        // If both endpoints are visible, it's a direct connection
+        if (visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId)) {
+            directConnections.add(`${sourceId}-${targetId}`);
+        } else {
+            // Hide edge if one endpoint is hidden
+            edge.style('display', 'none');
+        }
+    });
+
+    // Find indirect connections (nodes connected via hidden nodes)
     for (let i = 0; i < visibleArray.length; i++) {
         for (let j = i + 1; j < visibleArray.length; j++) {
-            const nodeA = state.cy.getElementById(visibleArray[i]);
-            const nodeB = state.cy.getElementById(visibleArray[j]);
+            const nodeAId = visibleArray[i];
+            const nodeBId = visibleArray[j];
 
-            if (nodeA.length && nodeB.length) {
-                // Check for direct edge
-                const directEdge = state.cy.edges().filter(edge =>
-                    (edge.source().id() === visibleArray[i] && edge.target().id() === visibleArray[j]) ||
-                    (edge.source().id() === visibleArray[j] && edge.target().id() === visibleArray[i])
-                );
+            // Skip if already directly connected
+            if (directConnections.has(`${nodeAId}-${nodeBId}`) ||
+                directConnections.has(`${nodeBId}-${nodeAId}`)) {
+                continue;
+            }
 
-                if (directEdge.length) {
-                    directEdge.forEach(e => directEdges.add(e.id()));
-                } else {
-                    // Check if connected via shortest path
-                    const dijkstra = state.cy.elements().dijkstra(nodeA, null, true);
-                    const pathToB = dijkstra.pathTo(nodeB);
+            // Check if there's a path via hidden nodes using BFS
+            const hasIndirectPath = checkIndirectConnection(nodeAId, nodeBId, visibleNodeIds);
 
-                    if (pathToB.length > 0 && dijkstra.distanceTo(nodeB) < Infinity) {
-                        // Mark as indirect connection
-                        indirectEdges.add(`indirect-${visibleArray[i]}-${visibleArray[j]}`);
-                    }
+            if (hasIndirectPath) {
+                // Find direct edge between them and mark as indirect
+                // (they're connected through hidden nodes)
+                const nodeA = state.cy.getElementById(nodeAId);
+                const nodeB = state.cy.getElementById(nodeBId);
+                const edge = nodeA.edgesWith(nodeB);
+                if (edge.length) {
+                    edge.addClass('indirect');
+                    edge.style('display', 'element');
                 }
             }
         }
     }
 
-    // Hide non-visible nodes
-    state.cy.nodes().forEach(node => {
-        if (!connectedNodeIds.has(node.id())) {
-            node.addClass('filtered-hidden');
-        }
-    });
+    // Run layout only on visible nodes
+    const visibleNodes = state.cy.nodes(':visible');
+    if (visibleNodes.length > 0) {
+        visibleNodes.layout({
+            name: 'dagre',
+            rankDir: 'TB',
+            nodeSep: 80,
+            rankSep: 100,
+            animate: true,
+            animationDuration: 400,
+            fit: true,
+            padding: 50
+        }).run();
+    }
+}
 
-    // Process edges
-    state.cy.edges().forEach(edge => {
-        const sourceId = edge.source().id();
-        const targetId = edge.target().id();
+function checkIndirectConnection(startId, endId, visibleNodeIds) {
+    // BFS to find if there's any path between startId and endId
+    const visited = new Set();
+    const queue = [startId];
 
-        // Hide edges where either endpoint is not visible
-        if (!connectedNodeIds.has(sourceId) || !connectedNodeIds.has(targetId)) {
-            edge.addClass('filtered-hidden');
-        }
-    });
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === endId) return true;
+        if (visited.has(current)) continue;
+        visited.add(current);
 
-    // Add indirect edges visualization
-    // For nodes that are connected via multiple hops, show dashed lines
-    visibleArray.forEach(nodeId => {
-        const node = state.cy.getElementById(nodeId);
-        const neighbors = node.neighborhood('node');
+        const currentNode = state.cy.getElementById(current);
+        const neighbors = currentNode.neighborhood('node');
 
         neighbors.forEach(neighbor => {
-            if (visibleNodeIds.has(neighbor.id())) {
-                // Direct connection exists, mark edge as normal
-                const edge = node.edgesWith(neighbor);
-                edge.removeClass('indirect');
-            }
-        });
-    });
-
-    // For filtered view, mark edges between visible nodes that go through hidden nodes as indirect
-    if (state.currentFilter !== 'all') {
-        state.cy.edges(':visible').forEach(edge => {
-            const sourceId = edge.source().id();
-            const targetId = edge.target().id();
-
-            // If both endpoints are in our visible set but edge goes through intermediate nodes
-            if (visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId)) {
-                // Keep normal style
-            } else if (visibleNodeIds.has(sourceId) || visibleNodeIds.has(targetId)) {
-                // One endpoint is visible, one is not - this shouldn't happen after filtering
+            const neighborId = neighbor.id();
+            if (!visited.has(neighborId)) {
+                queue.push(neighborId);
             }
         });
     }
 
-    // Run layout on visible nodes only
-    state.cy.nodes(':visible').layout({
-        name: 'dagre',
-        rankDir: 'TB',
-        nodeSep: 60,
-        rankSep: 80,
-        animate: true,
-        animationDuration: 300
-    }).run();
+    return false;
 }
 
 // ============================================
@@ -525,8 +561,7 @@ function applyFilter() {
 // ============================================
 
 function highlightNode(nodeId) {
-    // Clear previous highlights
-    state.cy.elements().removeClass('highlighted connected dimmed search-result');
+    state.cy.elements().removeClass('highlighted connected dimmed');
 
     const node = state.cy.getElementById(nodeId);
     const neighborhood = node.neighborhood();
@@ -543,7 +578,7 @@ function highlightNode(nodeId) {
     connectedNodes.removeClass('dimmed').addClass('connected');
     connectedEdges.removeClass('dimmed').addClass('highlighted');
 
-    // Also highlight edges that go OUT from this node
+    // Also highlight outgoing edges and nodes
     node.outgoers('edge').removeClass('dimmed').addClass('highlighted');
     node.outgoers('node').removeClass('dimmed').addClass('connected');
 
@@ -558,13 +593,14 @@ function highlightNode(nodeId) {
 }
 
 function clearHighlight() {
-    state.cy.elements().removeClass('highlighted connected dimmed search-result');
+    state.cy.elements().removeClass('highlighted connected dimmed');
     state.selectedNode = null;
 }
 
 function clearSearchHighlight() {
     state.cy.elements().removeClass('search-match search-dimmed');
     state.searchResults.clear();
+    updateSearchCount();
 }
 
 // ============================================
@@ -579,20 +615,16 @@ async function showFileDetails(path) {
     const importantBtn = document.getElementById('mark-important-btn');
     const importantText = document.getElementById('important-text');
 
-    // Update header
     fileName.textContent = path.split('/').pop();
     filePath.textContent = path;
 
-    // Update important button state
     const isImportant = state.importantNodes.has(path);
     importantBtn.classList.toggle('active', isImportant);
     importantText.textContent = isImportant ? 'Marked Important' : 'Mark as Important';
 
-    // Show panel
     panel.classList.remove('hidden');
     document.getElementById('search-results').classList.add('hidden');
 
-    // Fetch details
     try {
         const details = await api.getFileDetails(path);
         renderFileItems(details.items || []);
@@ -657,27 +689,93 @@ function hideFileDetails() {
 // Search
 // ============================================
 
-async function performSearch() {
-    const query = document.getElementById('search-input').value.trim();
-    if (!query) return;
+/**
+ * Parse search query for exact match parts (in quotes) vs semantic parts.
+ * Example: 'engine "cli.py"' -> { semantic: 'engine', exact: ['cli.py'] }
+ */
+function parseSearchQuery(query) {
+    const exactMatches = [];
+    let semanticPart = query;
 
-    const semantic = document.getElementById('semantic-toggle').checked;
+    // Extract quoted parts
+    const quoteRegex = /"([^"]+)"/g;
+    let match;
+    while ((match = quoteRegex.exec(query)) !== null) {
+        exactMatches.push(match[1].toLowerCase());
+    }
+
+    // Remove quoted parts from semantic query
+    semanticPart = query.replace(quoteRegex, '').trim();
+
+    return {
+        semantic: semanticPart,
+        exact: exactMatches,
+        hasExact: exactMatches.length > 0,
+        hasSemantic: semanticPart.length > 0
+    };
+}
+
+async function performSearch() {
+    const rawQuery = document.getElementById('search-input').value.trim();
+    if (!rawQuery) return;
+
     const resultsContainer = document.getElementById('search-results');
 
-    try {
-        const data = await api.search(query, semantic);
+    // Parse the query
+    const parsed = parseSearchQuery(rawQuery);
 
-        // Clear previous search highlights
+    try {
+        // Clear previous highlights
         clearSearchHighlight();
 
-        if (data.results && data.results.length > 0) {
+        let results = [];
+        const graph = state.graph;
+
+        // Step 1: If there are exact matches, filter by those first
+        let candidateNodes = graph.nodes;
+
+        if (parsed.hasExact) {
+            candidateNodes = graph.nodes.filter(node => {
+                const nodeId = node.id.toLowerCase();
+                const nodeLabel = node.label.toLowerCase();
+                return parsed.exact.some(exact =>
+                    nodeId.includes(exact) || nodeLabel.includes(exact)
+                );
+            });
+        }
+
+        // Step 2: If there's a semantic part, search semantically within candidates
+        if (parsed.hasSemantic && candidateNodes.length > 0) {
+            const data = await api.search(parsed.semantic, true);
+            if (data.results) {
+                // Filter semantic results to only include candidates
+                const candidateIds = new Set(candidateNodes.map(n => n.id));
+                results = data.results.filter(r => candidateIds.has(r.path));
+            }
+        } else if (parsed.hasExact) {
+            // Only exact matches, no semantic part
+            results = candidateNodes.map(node => ({
+                path: node.id,
+                label: node.label,
+                score: 1.0
+            }));
+        } else {
+            // Pure semantic search (no quotes)
+            const data = await api.search(rawQuery, true);
+            results = data.results || [];
+        }
+
+        if (results.length > 0) {
             // Store search results
-            data.results.forEach(result => {
+            results.forEach(result => {
                 state.searchResults.add(result.path);
             });
 
+            // Update search count
+            updateSearchCount();
+
             // Show results panel
-            resultsContainer.innerHTML = data.results.map(result => `
+            resultsContainer.innerHTML = results.map(result => `
                 <div class="search-result-item" data-path="${result.path}">
                     <div class="name">${result.label}</div>
                     <div class="path">${result.path}</div>
@@ -695,19 +793,17 @@ async function performSearch() {
                 });
             });
 
-            // Highlight nodes in graph - search matches get special color
-            // First dim all nodes
+            // Highlight nodes in graph
             state.cy.elements().addClass('search-dimmed');
 
-            // Then highlight search matches
-            data.results.forEach(result => {
+            results.forEach(result => {
                 const node = state.cy.getElementById(result.path);
                 if (node.length) {
                     node.removeClass('search-dimmed').addClass('search-match');
                 }
             });
 
-            // Also show edges between matched nodes
+            // Show edges between matched nodes
             state.cy.edges().forEach(edge => {
                 const sourceId = edge.source().id();
                 const targetId = edge.target().id();
@@ -716,16 +812,21 @@ async function performSearch() {
                 }
             });
 
-            // Update filter button to show search is available
-            const searchFilterBtn = document.querySelector('.filter-btn[data-filter="search"]');
-            searchFilterBtn.title = `Show only search results (${data.results.length})`;
-
         } else {
             resultsContainer.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No results found</p>';
             resultsContainer.classList.remove('hidden');
         }
     } catch (error) {
         console.error('Search failed:', error);
+    }
+}
+
+function updateSearchCount() {
+    const countEl = document.getElementById('search-count');
+    if (state.searchResults.size > 0) {
+        countEl.textContent = `(${state.searchResults.size})`;
+    } else {
+        countEl.textContent = '';
     }
 }
 
@@ -742,27 +843,22 @@ async function toggleImportant() {
     try {
         await api.setImportant(state.selectedNode, newImportance);
 
-        // Update local state
         if (newImportance) {
             state.importantNodes.add(state.selectedNode);
         } else {
             state.importantNodes.delete(state.selectedNode);
         }
 
-        // Update node data
         const node = state.cy.getElementById(state.selectedNode);
         node.data('important', newImportance);
 
-        // Update button
         const importantBtn = document.getElementById('mark-important-btn');
         const importantText = document.getElementById('important-text');
         importantBtn.classList.toggle('active', newImportance);
         importantText.textContent = newImportance ? 'Marked Important' : 'Mark as Important';
 
-        // Update stats
         updateStats();
 
-        // Re-apply filter if we're in important view
         if (state.currentFilter === 'important') {
             applyFilter();
         }

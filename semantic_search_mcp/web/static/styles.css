@@ -121,7 +121,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
+    min-width: 280px;
+    max-width: 600px;
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -129,6 +130,26 @@ body {
     display: flex;
     flex-direction: column;
     z-index: 10;
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Sidebar Resize Handle */
+.sidebar-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    transition: background var(--transition-fast);
+    z-index: 20;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.resizing {
+    background: var(--accent-primary);
 }
 
 .sidebar-header {
@@ -172,7 +193,20 @@ body {
 .search-box {
     display: flex;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
+}
+
+.search-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+
+.search-hint .hint-icon {
+    font-size: 12px;
 }
 
 .search-box input {
