@@ -48,15 +48,23 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 
 > Pour désactiver : `semcp --no-web`
 
-### 3. Recherche (MCP Tool)
+### 3. Recherche (MCP Tools)
 
-Dans votre agent (Cursor, Claude, etc.), vous avez accès à l'outil :
+Dans votre agent (Cursor, Claude, etc.), vous avez accès aux outils :
 
-- **`semsearch`** : Effectue une recherche sémantique.
-  - **MANDATORY** : Utilisez cet outil au début de chaque tâche pour comprendre la structure du code.
-  - **IMPORTANT** : La requête doit être en **anglais** pour des résultats optimaux.
+- **`semsearch`** : Recherche sémantique simple.
   - *Query* : "How is authentication handled?"
   - *Glob* : "src/*.py" (optionnel)
+
+- **`semgraph`** : Recherche sémantique avec **contexte graphe de dépendances complet**.
+  - Retourne pour chaque fichier trouvé :
+    - Imports sortants/entrants (connexions directes)
+    - Connexions indirectes avec les fichiers intermédiaires
+    - Structure du code (classes/fonctions avec docstrings complètes)
+    - Détection de code mort (symboles non utilisés)
+    - Flag "Important" si le fichier est marqué
+  - *Query* : "dependency analyzer" (anglais requis)
+  - *Limit* : 10 (optionnel, nombre de fichiers max)
 
 ## Description détaillée
 
@@ -123,5 +131,6 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Groupement par dossier](docs/tasks/folder_grouping.md) (Compound Nodes)
 - [x] Suppression de fichiers via Interface Web (Double-click)
 - [x] Détection de code mort (Dead Code Detection)
+- [x] Outil MCP `semgraph` (recherche sémantique + graphe + détails)
 
 
