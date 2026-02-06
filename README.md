@@ -42,7 +42,7 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Focus** sur un noeud pour voir ses dépendances
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
-- **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (Compound Nodes)
+- **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (**Dossiers de bas niveau uniquement** pour une clarté maximale)
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 - **Détection de code mort** : Affichage en rouge des fonctions/classes non utilisées (dead code)
 - **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) pour un graphe sans bruit.
@@ -131,8 +131,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Visualisation Graphe de Dépendances](docs/tasks/implement_graph_visualization.md)
 - [x] Mise à jour temps réel du graphe (WebSocket + file watcher)
 - [x] [Groupement par dossier](docs/tasks/folder_grouping.md) (Compound Nodes)
+- [x] [Simplification des dossiers](docs/tasks/simplify_folder_grouping.md) (Bas niveau uniquement)
 - [x] Suppression de fichiers via Interface Web (Double-click)
 - [x] Détection de code mort (Dead Code Detection)
 - [x] Outil MCP `semgraph` (recherche sémantique + graphe + détails)
-
-

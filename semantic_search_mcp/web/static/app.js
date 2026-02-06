@@ -950,14 +950,10 @@ async function reloadMainGraph() {
 
 function generateFolderHierarchy(nodes) {
     /**
-     * Generate a complete folder hierarchy with nested compound nodes.
+     * Generate only the lowest level folder nodes (immediate parents of files).
+     * This avoids nested complex boxes and lightens the graph.
      * 
-     * For a file in "src/utils/helpers", this creates:
-     * - folder:src (parent: null)
-     * - folder:src/utils (parent: folder:src)
-     * - folder:src/utils/helpers (parent: folder:src/utils)
-     * 
-     * Returns: { folderNodes: [...], fileParents: Map<fileId, parentFolderId> }
+     * Returns: { folders: Map<id, {node, parent}>, fileParents: Map<fileId, parentFolderId> }
      */
     const folders = new Map(); // folderId -> { node definition, parent folderId }
     const fileParents = new Map(); // fileNodeId -> immediate parent folder id
@@ -966,37 +962,27 @@ function generateFolderHierarchy(nodes) {
         const dir = node.data('directory');
         if (!dir) return;
 
-        // Split path into parts
-        const parts = dir.split('/').filter(p => p.length > 0);
+        // Use the full directory path as the folder ID and label
+        // Since we are no longer nesting, the full path is clearer as a label
+        const folderId = `folder:${dir}`;
 
-        // Create all intermediate folders
-        let currentPath = '';
-        let parentFolderId = null;
-
-        for (let i = 0; i < parts.length; i++) {
-            currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
-            const folderId = `folder:${currentPath}`;
-
-            if (!folders.has(folderId)) {
-                folders.set(folderId, {
-                    node: {
-                        group: 'nodes',
-                        data: {
-                            id: folderId,
-                            label: parts[i], // Only show the folder name, not full path
-                            type: 'folder',
-                            fullPath: currentPath
-                        }
-                    },
-                    parent: parentFolderId
-                });
-            }
-
-            parentFolderId = folderId;
+        if (!folders.has(folderId)) {
+            folders.set(folderId, {
+                node: {
+                    group: 'nodes',
+                    data: {
+                        id: folderId,
+                        label: dir,
+                        type: 'folder',
+                        fullPath: dir
+                    }
+                },
+                parent: null // No nesting anymore
+            });
         }
 
-        // The file's parent is the deepest folder (last in the path)
-        fileParents.set(node.id(), parentFolderId);
+        // Parent is always the immediate folder
+        fileParents.set(node.id(), folderId);
     });
 
     return { folders, fileParents };
@@ -1011,18 +997,10 @@ function applyFolderGrouping() {
             const currentNodes = state.cy.nodes('[type != "folder"]');
             const { folders, fileParents } = generateFolderHierarchy(currentNodes);
 
-            // 2. Add folder nodes (in order from root to leaf for proper parent assignment)
-            // Sort by path depth to ensure parents exist before children
-            const sortedFolders = Array.from(folders.entries())
-                .sort((a, b) => a[0].split('/').length - b[0].split('/').length);
-
-            sortedFolders.forEach(([folderId, { node, parent }]) => {
+            // 2. Add folder nodes
+            folders.forEach(({ node }, folderId) => {
                 if (state.cy.getElementById(folderId).empty()) {
                     state.cy.add(node);
-                }
-                // Set folder's parent (for nested folders)
-                if (parent) {
-                    state.cy.getElementById(folderId).move({ parent: parent });
                 }
             });
 
