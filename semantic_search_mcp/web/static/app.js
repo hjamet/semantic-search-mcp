@@ -1005,9 +1005,18 @@ async function showFileDetails(path) {
     const importantText = document.getElementById('important-text');
     const hideBtn = document.getElementById('hide-node-btn');
     const hideText = document.getElementById('hide-text');
+    const deleteBtn = document.getElementById('delete-file-btn');
+    const deleteText = document.getElementById('delete-text');
 
     fileName.textContent = path.split('/').pop();
     filePath.textContent = path;
+
+    // Reset delete button state
+    if (deleteBtn && deleteText) {
+        deleteBtn.disabled = false;
+        deleteBtn.classList.remove('confirm');
+        deleteText.textContent = 'Delete';
+    }
 
     const isImportant = state.importantNodes.has(path);
     importantBtn.classList.toggle('active', isImportant);
