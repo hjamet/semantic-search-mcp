@@ -1297,9 +1297,13 @@ async function toggleHidden() {
 // ============================================
 
 function updateStats() {
-    document.getElementById('nodes-count').textContent = state.graph.nodes.length;
-    document.getElementById('edges-count').textContent = state.graph.edges.length;
-    document.getElementById('important-count').textContent = state.importantNodes.size;
+    const nodesCount = document.getElementById('nodes-count');
+    const edgesCount = document.getElementById('edges-count');
+    const importantCount = document.getElementById('important-count');
+
+    if (nodesCount) nodesCount.textContent = state.graph.nodes.length;
+    if (edgesCount) edgesCount.textContent = state.graph.edges.length;
+    if (importantCount) importantCount.textContent = state.importantNodes.size;
     updateHiddenCount();
 }
 
