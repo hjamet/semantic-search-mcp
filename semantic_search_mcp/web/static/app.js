@@ -18,6 +18,7 @@ const state = {
     hiddenNodes: new Set(),
     searchResults: new Set(),
     currentFilter: 'all', // 'all', 'important', 'search', 'hidden'
+    showFolders: false, // Folder grouping toggle
     wasInHiddenView: false, // Track if we came from hidden view
     websocket: null // WebSocket connection for real-time updates
 };
@@ -267,6 +268,27 @@ const cytoscapeStyle = [
             'border-style': 'dashed',
             'border-color': '#ef4444'
         }
+    },
+    {
+        selector: ':parent',
+        style: {
+            'background-color': 'rgba(99, 102, 241, 0.05)',
+            'background-opacity': 0.5,
+            'border-color': 'rgba(99, 102, 241, 0.3)',
+            'border-width': 2,
+            'border-style': 'dashed',
+            'border-radius': 12,
+            'padding': 30,
+            'label': 'data(label)',
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'text-margin-y': -10,
+            'font-size': 12,
+            'font-weight': 600,
+            'color': '#818cf8',
+            'text-outline-color': '#0a0a0f',
+            'text-outline-width': 2
+        }
     }
 ];
 
@@ -325,7 +347,9 @@ async function initGraph() {
             },
             minZoom: 0.1,
             maxZoom: 3,
-            wheelSensitivity: 0.3
+            wheelSensitivity: 0.3,
+            boxSelectionEnabled: true,
+            autoungrabify: false
         });
 
         // Store original positions after layout
@@ -447,6 +471,13 @@ function setupEventHandlers() {
 
     // Hide button
     document.getElementById('hide-node-btn').addEventListener('click', toggleHidden);
+
+    // Folder Toggle
+    const folderToggle = document.getElementById('folder-toggle');
+    folderToggle.addEventListener('change', (e) => {
+        state.showFolders = e.target.checked;
+        applyFolderGrouping();
+    });
 
     // Sidebar resize
     setupSidebarResize();
@@ -791,9 +822,85 @@ async function reloadMainGraph() {
 
         updateStats();
 
+        // Re-apply folder grouping if enabled
+        if (state.showFolders) {
+            applyFolderGrouping();
+        }
+
     } catch (error) {
         console.error('Failed to reload graph:', error);
     }
+}
+
+// ============================================
+// Folder Grouping Functions
+// ============================================
+
+function generateFolderNodes(nodes) {
+    const folders = new Map();
+    nodes.forEach(node => {
+        const dir = node.data('directory');
+        if (dir) {
+            if (!folders.has(dir)) {
+                // Folder hierarchy: we could split and create nested folders, 
+                // but let's stick to flat directories for now as per plan
+                folders.set(dir, {
+                    group: 'nodes',
+                    data: {
+                        id: `folder:${dir}`,
+                        label: dir,
+                        type: 'folder'
+                    }
+                });
+            }
+        }
+    });
+    return Array.from(folders.values());
+}
+
+function applyFolderGrouping() {
+    if (!state.cy) return;
+
+    state.cy.batch(() => {
+        if (state.showFolders) {
+            // 1. Generate and add folder nodes
+            const currentNodes = state.cy.nodes('[type != "folder"]');
+            const folderNodes = generateFolderNodes(currentNodes);
+
+            // Only add folders that don't exist
+            folderNodes.forEach(f => {
+                if (state.cy.getElementById(f.data.id).empty()) {
+                    state.cy.add(f);
+                }
+            });
+
+            // 2. Assign parents
+            currentNodes.forEach(node => {
+                const dir = node.data('directory');
+                if (dir) {
+                    node.move({ parent: `folder:${dir}` });
+                }
+            });
+        } else {
+            // 1. Remove parents
+            state.cy.nodes('[type != "folder"]').move({ parent: null });
+            // 2. Remove folder nodes
+            state.cy.nodes('[type = "folder"]').remove();
+        }
+    });
+
+    // 3. Relayout
+    const layout = state.cy.layout({
+        name: 'dagre',
+        rankDir: 'TB',
+        nodeSep: state.showFolders ? 100 : 60,
+        rankSep: state.showFolders ? 120 : 80,
+        animate: true,
+        animationDuration: 500,
+        fit: true,
+        padding: 50
+    });
+    layout.run();
 }
 
 // ============================================

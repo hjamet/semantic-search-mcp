@@ -41,6 +41,8 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Focus** sur un noeud pour voir ses dépendances
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
+- **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (Compound Nodes)
+
 
 > Pour désactiver : `semcp --no-web`
 
@@ -116,4 +118,6 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Installation simplifiée via uv tool local
 - [x] [Visualisation Graphe de Dépendances](docs/tasks/implement_graph_visualization.md)
 - [x] Mise à jour temps réel du graphe (WebSocket + file watcher)
+- [x] [Groupement par dossier](docs/tasks/folder_grouping.md) (Compound Nodes)
+
 

@@ -252,14 +252,25 @@ body {
     transform: scale(0.95);
 }
 
-/* Toggle Switch */
+/* Toggle Section */
+.toggle-section {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
 .toggle-container {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     cursor: pointer;
     font-size: 13px;
     color: var(--text-secondary);
+    user-select: none;
+    transition: color var(--transition-fast);
+}
+
+.toggle-container:hover {
+    color: var(--text-primary);
 }
 
 .toggle-container input {
@@ -267,32 +278,35 @@ body {
 }
 
 .toggle-slider {
-    width: 36px;
+    width: 40px;
     height: 20px;
     background: var(--bg-tertiary);
-    border-radius: 10px;
+    border-radius: 20px;
     position: relative;
-    transition: background var(--transition-fast);
+    transition: all var(--transition-normal);
+    border: 1px solid var(--border-color);
 }
 
 .toggle-slider::after {
     content: '';
     position: absolute;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     background: var(--text-muted);
     border-radius: 50%;
     top: 2px;
     left: 2px;
-    transition: transform var(--transition-fast), background var(--transition-fast);
+    transition: all var(--transition-normal);
 }
 
 .toggle-container input:checked+.toggle-slider {
     background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 10px var(--accent-glow);
 }
 
 .toggle-container input:checked+.toggle-slider::after {
-    transform: translateX(16px);
+    transform: translateX(20px);
     background: white;
 }
 

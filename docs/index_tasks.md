@@ -13,4 +13,5 @@ Ce dossier contient les spécifications des tâches techniques réalisées sur l
 | [Enhance Tool Description](tasks/enhance_tool_description.md) | Amélioration description outil | 2026-02-02 | `Up to date` |
 | [Refine Tool Description](tasks/refine_tool_description.md) | Maximisation utilisation outil | 2026-02-04 | `Up to date` |
 | [Graph Visualization](tasks/implement_graph_visualization.md) | Visualisation graphe dépendances | 2026-02-06 | `Up to date` |
+| [Folder Grouping](tasks/folder_grouping.md) | Groupement visuel par dossier | 2026-02-06 | `Up to date` |
 
