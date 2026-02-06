@@ -38,7 +38,8 @@ uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
 # Note: fastembed requires onnxruntime, but onnxruntime-gpu satisfies this
 echo "🎮 Setting up GPU support (CUDA)..."
 "$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
-"$VENV_DIR/bin/pip" install onnxruntime-gpu --quiet 2>/dev/null || true
+# Force reinstall to ensure the namespace is correct and SessionOptions are present
+"$VENV_DIR/bin/pip" install onnxruntime-gpu --force-reinstall --quiet
 
 # 4. Create Wrapper Scripts (not symlinks, to ignore active venvs)
 echo "🔗 Creating wrapper scripts in $BIN_DIR..."
