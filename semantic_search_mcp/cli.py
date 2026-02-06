@@ -122,7 +122,7 @@ def main(
             from semantic_search_mcp.web.api import start_server
             console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{WEB_PORT}]http://localhost:{WEB_PORT}[/link]")
             console.print("[dim]Press Ctrl+C to stop.[/]\n")
-            start_server(cwd, engine=engine, port=WEB_PORT, open_browser=True)
+            start_server(cwd, engine=engine, port=WEB_PORT)
         except ImportError as e:
             console.print(f"[yellow]⚠ Web server not available: {e}[/]")
         except Exception as e:

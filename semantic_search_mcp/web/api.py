@@ -327,7 +327,7 @@ def configure_server(repo_path: str, engine=None):
     _hidden_nodes_path = Path(repo_path) / ".semcp" / "hidden_nodes.json"
 
 
-def start_server(repo_path: str, engine=None, port: int = 8765, open_browser: bool = True):
+def start_server(repo_path: str, engine=None, port: int = 8765):
     """
     Start the web server in a background thread.
     
@@ -335,7 +335,6 @@ def start_server(repo_path: str, engine=None, port: int = 8765, open_browser: bo
         repo_path: Path to the repository.
         engine: Optional SemanticEngine for semantic search.
         port: Port to run the server on.
-        open_browser: Whether to open browser automatically.
     
     Returns:
         The server thread.
@@ -353,11 +352,5 @@ def start_server(repo_path: str, engine=None, port: int = 8765, open_browser: bo
     
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
-    
-    if open_browser:
-        import webbrowser
-        import time
-        time.sleep(0.5)  # Give server time to start
-        webbrowser.open(f"http://localhost:{port}")
     
     return thread

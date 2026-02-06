@@ -32,9 +32,9 @@ class SemanticEngine:
         print(f"DEBUG: Initializing SemanticEngine on {self.device}")
         
         # Model selection: BGE-small-en-v1.5 is fast and efficient
-        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-        
-        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        # Use CUDA if available, with CPU fallback
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self.device == "cuda" else ["CPUExecutionProvider"]
+        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
         
         # Metadata storage
         self.metadata_path = self.storage_path / "index_metadata.json"

@@ -34,6 +34,11 @@ echo "📦 Installing specific dependencies..."
 # Force install dependencies in the venv
 uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
 
+# Fix CUDA support: fastembed pulls onnxruntime (CPU), we need onnxruntime-gpu
+echo "🎮 Setting up GPU support (CUDA)..."
+"$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
+"$VENV_DIR/bin/pip" install onnxruntime-gpu --force-reinstall --quiet
+
 # 4. Create Symlinks
 echo "🔗 Creating symlinks in $BIN_DIR..."
 mkdir -p "$BIN_DIR"

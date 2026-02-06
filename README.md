@@ -12,6 +12,8 @@ curl -LsSf https://raw.githubusercontent.com/hjamet/semantic-search-mcp/main/ins
 
 > **Note**: Assurez-vous d'avoir `uv` installé. Si non, le script l'installera pour vous.
 
+> **GPU (CUDA)** : Le support GPU est activé automatiquement si vous avez un GPU NVIDIA avec CUDA. Le script installe `onnxruntime-gpu` et `torch` pour des embeddings accélérés.
+
 ## Utilisation
 
 ### 1. Indexation & Context Switch (CLI)
