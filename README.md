@@ -5,6 +5,7 @@
 **Nouvelles fonctionnalités** :
 - 🎯 Visualisation interactive du graphe de dépendances dans le navigateur
 - ⚡ Mise à jour temps réel du graphe (WebSocket)
+- 🧠 **Analyseur intelligent** : Support du `TYPE_CHECKING`, imports relatifs complexes et fallbacks (try/except)
 
 ## Installation
 
@@ -44,6 +45,7 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (Compound Nodes)
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 - **Détection de code mort** : Affichage en rouge des fonctions/classes non utilisées (dead code)
+- **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) pour un graphe sans bruit.
 
 
 > Pour désactiver : `semcp --no-web`

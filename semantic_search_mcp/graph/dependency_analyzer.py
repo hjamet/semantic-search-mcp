@@ -56,34 +56,112 @@ class DependencyAnalyzer:
             tree = ast.parse(content)
             imports = []
             
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
+            class ImportVisitor(ast.NodeVisitor):
+                def __init__(self, analyzer):
+                    self.analyzer = analyzer
+                    self.imports = []
+                    self.in_type_checking = False
+                    self.in_try_block = False
+                    self.in_except_block = False
+
+                def visit_If(self, node):
+                    # Check for if TYPE_CHECKING:
+                    is_type_checking = False
+                    if isinstance(node.test, ast.Name) and node.test.id == 'TYPE_CHECKING':
+                        is_type_checking = True
+                    elif isinstance(node.test, ast.Attribute) and node.test.attr == 'TYPE_CHECKING':
+                        is_type_checking = True
+                    
+                    if is_type_checking:
+                        old_val = self.in_type_checking
+                        self.in_type_checking = True
+                        # Still visit but we'll flag imports
+                        self.generic_visit(node)
+                        self.in_type_checking = old_val
+                    else:
+                        self.generic_visit(node)
+
+                def visit_Try(self, node):
+                    # Flag that we are in a try block
+                    old_try = self.in_try_block
+                    self.in_try_block = True
+                    for item in node.body:
+                        self.visit(item)
+                    self.in_try_block = old_try
+
+                    # Flag except blocks
+                    for handler in node.handlers:
+                        old_except = self.in_except_block
+                        self.in_except_block = True
+                        self.visit(handler)
+                        self.in_except_block = old_except
+                    
+                    for item in node.orelse:
+                        self.visit(item)
+                    for item in node.finalbody:
+                        self.visit(item)
+
+                def visit_Import(self, node):
+                    if self.in_type_checking:
+                        return
                     for alias in node.names:
-                        imports.append(alias.name)
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imports.append(node.module)
-                    # Handle relative imports
-                    if node.level > 0:
-                        # Relative import - resolve to absolute
-                        rel_path = self._resolve_relative_import(
-                            file_path, node.module or '', node.level
-                        )
-                        if rel_path:
-                            imports.append(rel_path)
+                        self.imports.append((alias.name, 0))
+
+                def visit_ImportFrom(self, node):
+                    if self.in_type_checking:
+                        return
+                    module = node.module or ''
+                    level = node.level
+                    
+                    if level > 0:
+                        # For relative imports, both the module and the names can be files
+                        self.imports.append((module, level))
+                        # Also handle 'from . import a, b' where a and b are modules
+                        if not module:
+                            for alias in node.names:
+                                self.imports.append((alias.name, level))
+                        else:
+                            for alias in node.names:
+                                self.imports.append((f"{module}.{alias.name}", level))
+                    else:
+                        # Absolute import
+                        self.imports.append((module, 0))
+                        for alias in node.names:
+                            self.imports.append((f"{module}.{alias.name}", 0))
+
+            visitor = ImportVisitor(self)
+            visitor.visit(tree)
             
-            return imports
+            # Process gathered imports
+            all_imports = []
+            for module_name, level in visitor.imports:
+                if level > 0:
+                    # Resolve relative import to a real path string
+                    resolved = self._resolve_relative_import(file_path, module_name, level)
+                    if resolved:
+                        all_imports.append(resolved)
+                else:
+                    # Absolute import
+                    all_imports.append(module_name)
+                    
+            return all_imports
         except (SyntaxError, UnicodeDecodeError, FileNotFoundError, IOError):
             return []
     
     def _resolve_relative_import(self, file_path: Path, module: str, level: int) -> Optional[str]:
         """Resolve a relative import to a module path."""
-        current_dir = file_path.parent
-        for _ in range(level - 1):
-            current_dir = current_dir.parent
-        
-        # Try to find the module
-        if module:
+        try:
+            current_dir = file_path.parent
+            for _ in range(level - 1):
+                current_dir = current_dir.parent
+            
+            # If from . import something, module might be empty
+            if not module:
+                if (current_dir / '__init__.py').exists():
+                    return str((current_dir / '__init__.py').relative_to(self.repo_path))
+                return None
+
+            # Try to find the module
             parts = module.split('.')
             target = current_dir / '/'.join(parts)
             
@@ -92,7 +170,15 @@ class DependencyAnalyzer:
                 return str(target.with_suffix('.py').relative_to(self.repo_path))
             elif (target / '__init__.py').exists():
                 return str((target / '__init__.py').relative_to(self.repo_path))
-        
+            elif target.exists() and target.is_dir():
+                # Might be a namespace package or just a directory
+                # If there's no __init__.py, we don't treat it as a python dependency normally
+                # but for graph purposes, maybe we should find ANY python file inside?
+                # For now, stick to standard packages.
+                pass
+        except (ValueError, AttributeError):
+            pass
+            
         return None
     
     def _parse_js_imports(self, file_path: Path) -> List[str]:
@@ -121,21 +207,26 @@ class DependencyAnalyzer:
     
     def _resolve_import_to_file(self, source_file: Path, import_name: str) -> Optional[str]:
         """Try to resolve an import name to a file path in the repository."""
-        # Skip external modules (no './' or '../' and not relative path)
+        # If it's already a path-like string (from _resolve_relative_import), return it
+        if import_name.endswith('.py'):
+            if (self.repo_path / import_name).exists():
+                return import_name
+
+        # Skip external modules if they don't look like paths
         if not import_name.startswith('.') and '/' not in import_name:
-            # Check if it's an internal module (matches a top-level directory)
+            # Check if it starts with a top-level package existing in repo
             parts = import_name.split('.')
             potential_path = self.repo_path / parts[0]
             if not potential_path.exists():
-                return None  # External dependency
+                return None  # Likely external dependency
         
-        # For relative imports in JS
+        # For relative imports in JS/TS (also handles strings from py but usually relative)
         if import_name.startswith('.'):
             base_dir = source_file.parent
             target = (base_dir / import_name).resolve()
             
             # Try with extensions
-            for ext in ['', '.py', '.js', '.ts', '.jsx', '.tsx', '/index.js', '/index.ts']:
+            for ext in ['', '.py', '.js', '.ts', '.jsx', '.tsx', '/index.js', '/index.ts', '/__init__.py']:
                 candidate = Path(str(target) + ext)
                 if candidate.exists() and candidate.is_file():
                     try:
@@ -143,13 +234,25 @@ class DependencyAnalyzer:
                     except ValueError:
                         continue
         
-        # For Python-style imports (dots to slashes)
+        # For Python-style absolute imports (dots to slashes)
         parts = import_name.replace('.', '/')
+        # Try finding the file or the package
         for ext in ['.py', '/__init__.py']:
             candidate = self.repo_path / (parts + ext)
-            if candidate.exists():
+            if candidate.exists() and candidate.is_file():
                 return str(candidate.relative_to(self.repo_path))
         
+        # Try partial resolution for imports like 'from package.subpkg import something'
+        # when 'something' is actually a module 'something.py'
+        if '.' in import_name:
+            parts = import_name.split('.')
+            for i in range(len(parts)-1, 0, -1):
+                prefix = '/'.join(parts[:i])
+                suffix = parts[i]
+                candidate = self.repo_path / prefix / f"{suffix}.py"
+                if candidate.exists() and candidate.is_file():
+                    return str(candidate.relative_to(self.repo_path))
+
         return None
     
     def analyze_file(self, file_path: Path) -> Dict[str, Any]:
