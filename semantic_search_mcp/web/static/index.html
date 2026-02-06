@@ -86,6 +86,16 @@
                         </svg>
                         Search <span id="search-count"></span>
                     </button>
+                    <button class="filter-btn" data-filter="hidden" title="Show hidden nodes">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94">
+                            </path>
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                            <path d="m1 1 22 22"></path>
+                        </svg>
+                        Hidden <span id="hidden-count"></span>
+                    </button>
                 </div>
             </div>
 
@@ -100,10 +110,22 @@
                 </div>
                 <div class="details-path" id="file-path">/path/to/file</div>
 
-                <button id="mark-important-btn" class="important-btn">
-                    <span class="star-icon">★</span>
-                    <span id="important-text">Mark as Important</span>
-                </button>
+                <div class="action-buttons">
+                    <button id="mark-important-btn" class="important-btn">
+                        <span class="star-icon">★</span>
+                        <span id="important-text">Important</span>
+                    </button>
+                    <button id="hide-node-btn" class="hide-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94">
+                            </path>
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                            <path d="m1 1 22 22"></path>
+                        </svg>
+                        <span id="hide-text">Hide</span>
+                    </button>
+                </div>
 
                 <div class="details-content">
                     <h3>Contents</h3>

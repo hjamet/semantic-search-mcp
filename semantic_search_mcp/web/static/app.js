@@ -11,10 +11,12 @@
 const state = {
     cy: null,
     graph: { nodes: [], edges: [] },
+    hiddenGraph: { nodes: [], edges: [] }, // Separate graph for hidden nodes
     selectedNode: null,
     importantNodes: new Set(),
+    hiddenNodes: new Set(),
     searchResults: new Set(),
-    currentFilter: 'all' // 'all', 'important', 'search'
+    currentFilter: 'all' // 'all', 'important', 'search', 'hidden'
 };
 
 // ============================================
@@ -22,9 +24,16 @@ const state = {
 // ============================================
 
 const api = {
-    async getGraph() {
-        const response = await fetch('/api/graph');
+    async getGraph(includeHidden = false) {
+        const url = includeHidden ? '/api/graph?include_hidden=true' : '/api/graph';
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch graph');
+        return response.json();
+    },
+
+    async getHiddenGraph() {
+        const response = await fetch('/api/graph/hidden');
+        if (!response.ok) throw new Error('Failed to fetch hidden graph');
         return response.json();
     },
 
@@ -54,9 +63,19 @@ const api = {
         return response.json();
     },
 
-    async getImportant() {
-        const response = await fetch('/api/important');
-        if (!response.ok) throw new Error('Failed to get important nodes');
+    async setHidden(path, hidden) {
+        const response = await fetch('/api/hidden', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, hidden })
+        });
+        if (!response.ok) throw new Error('Failed to update hidden status');
+        return response.json();
+    },
+
+    async getHidden() {
+        const response = await fetch('/api/hidden');
+        if (!response.ok) throw new Error('Failed to get hidden nodes');
         return response.json();
     }
 };
@@ -176,7 +195,7 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Search result highlight - primary match
+    // Search result highlight
     {
         selector: 'node.search-match',
         style: {
@@ -202,7 +221,7 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Indirect connection (dashed edge)
+    // Indirect connection
     {
         selector: 'edge.indirect',
         style: {
@@ -211,6 +230,15 @@ const cytoscapeStyle = [
             'line-color': 'rgba(129, 140, 248, 0.5)',
             'target-arrow-color': 'rgba(129, 140, 248, 0.5)',
             'width': 1.5
+        }
+    },
+    // Hidden node style (for hidden view)
+    {
+        selector: 'node.hidden-node',
+        style: {
+            'opacity': 0.6,
+            'border-style': 'dashed',
+            'border-color': '#ef4444'
         }
     }
 ];
@@ -224,8 +252,12 @@ let originalPositions = null;
 
 async function initGraph() {
     try {
-        // Fetch graph data
-        state.graph = await api.getGraph();
+        // Fetch main graph (without hidden nodes)
+        state.graph = await api.getGraph(false);
+
+        // Fetch hidden nodes info
+        const hiddenData = await api.getHidden();
+        hiddenData.nodes.forEach(id => state.hiddenNodes.add(id));
 
         // Convert to Cytoscape format
         const elements = {
@@ -236,7 +268,8 @@ async function initGraph() {
                     directory: node.directory,
                     extension: node.extension,
                     type: node.type,
-                    important: node.important || false
+                    important: node.important || false,
+                    hidden: node.hidden || false
                 }
             })),
             edges: state.graph.edges.map((edge, idx) => ({
@@ -374,6 +407,9 @@ function setupEventHandlers() {
     // Important button
     document.getElementById('mark-important-btn').addEventListener('click', toggleImportant);
 
+    // Hide button
+    document.getElementById('hide-node-btn').addEventListener('click', toggleHidden);
+
     // Sidebar resize
     setupSidebarResize();
 }
@@ -406,7 +442,6 @@ function setupSidebarResize() {
             handle.classList.remove('resizing');
             document.body.style.cursor = 'default';
             document.body.style.userSelect = '';
-            // Resize the graph container
             state.cy.resize();
         }
     });
@@ -428,10 +463,17 @@ function setFilter(filter) {
     applyFilter();
 }
 
-function applyFilter() {
+async function applyFilter() {
+    // For hidden filter, we need to load hidden nodes
+    if (state.currentFilter === 'hidden') {
+        await loadHiddenNodes();
+        return;
+    }
+
+    // For other filters, use the normal graph
     // First, show all elements and remove classes
     state.cy.elements().style('display', 'element');
-    state.cy.elements().removeClass('indirect');
+    state.cy.elements().removeClass('indirect hidden-node');
 
     if (state.currentFilter === 'all') {
         // Restore original positions
@@ -457,7 +499,6 @@ function applyFilter() {
     }
 
     if (visibleNodeIds.size === 0) {
-        // No nodes match the filter - show message via empty state
         state.cy.elements().style('display', 'none');
         return;
     }
@@ -469,53 +510,17 @@ function applyFilter() {
         }
     });
 
-    // Process edges - show direct edges, mark indirect connections
-    const visibleArray = Array.from(visibleNodeIds);
-    const directConnections = new Set();
-
+    // Process edges
     state.cy.edges().forEach(edge => {
         const sourceId = edge.source().id();
         const targetId = edge.target().id();
 
-        // If both endpoints are visible, it's a direct connection
-        if (visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId)) {
-            directConnections.add(`${sourceId}-${targetId}`);
-        } else {
-            // Hide edge if one endpoint is hidden
+        if (!visibleNodeIds.has(sourceId) || !visibleNodeIds.has(targetId)) {
             edge.style('display', 'none');
         }
     });
 
-    // Find indirect connections (nodes connected via hidden nodes)
-    for (let i = 0; i < visibleArray.length; i++) {
-        for (let j = i + 1; j < visibleArray.length; j++) {
-            const nodeAId = visibleArray[i];
-            const nodeBId = visibleArray[j];
-
-            // Skip if already directly connected
-            if (directConnections.has(`${nodeAId}-${nodeBId}`) ||
-                directConnections.has(`${nodeBId}-${nodeAId}`)) {
-                continue;
-            }
-
-            // Check if there's a path via hidden nodes using BFS
-            const hasIndirectPath = checkIndirectConnection(nodeAId, nodeBId, visibleNodeIds);
-
-            if (hasIndirectPath) {
-                // Find direct edge between them and mark as indirect
-                // (they're connected through hidden nodes)
-                const nodeA = state.cy.getElementById(nodeAId);
-                const nodeB = state.cy.getElementById(nodeBId);
-                const edge = nodeA.edgesWith(nodeB);
-                if (edge.length) {
-                    edge.addClass('indirect');
-                    edge.style('display', 'element');
-                }
-            }
-        }
-    }
-
-    // Run layout only on visible nodes
+    // Run layout on visible nodes
     const visibleNodes = state.cy.nodes(':visible');
     if (visibleNodes.length > 0) {
         visibleNodes.layout({
@@ -531,29 +536,120 @@ function applyFilter() {
     }
 }
 
-function checkIndirectConnection(startId, endId, visibleNodeIds) {
-    // BFS to find if there's any path between startId and endId
-    const visited = new Set();
-    const queue = [startId];
+async function loadHiddenNodes() {
+    try {
+        // Fetch hidden nodes graph
+        const hiddenGraph = await api.getHiddenGraph();
 
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (current === endId) return true;
-        if (visited.has(current)) continue;
-        visited.add(current);
+        // Clear current graph and add hidden nodes
+        state.cy.elements().remove();
 
-        const currentNode = state.cy.getElementById(current);
-        const neighbors = currentNode.neighborhood('node');
+        const elements = {
+            nodes: hiddenGraph.nodes.map(node => ({
+                data: {
+                    id: node.id,
+                    label: node.label,
+                    directory: node.directory,
+                    extension: node.extension,
+                    type: node.type,
+                    important: node.important || false,
+                    hidden: true
+                },
+                classes: 'hidden-node'
+            })),
+            edges: hiddenGraph.edges.map((edge, idx) => ({
+                data: {
+                    id: `edge-hidden-${idx}`,
+                    source: edge.source,
+                    target: edge.target
+                }
+            }))
+        };
 
-        neighbors.forEach(neighbor => {
-            const neighborId = neighbor.id();
-            if (!visited.has(neighborId)) {
-                queue.push(neighborId);
+        state.cy.add(elements.nodes);
+        state.cy.add(elements.edges);
+
+        // Run layout
+        state.cy.layout({
+            name: 'dagre',
+            rankDir: 'TB',
+            nodeSep: 60,
+            rankSep: 80,
+            animate: true,
+            animationDuration: 400,
+            fit: true,
+            padding: 50
+        }).run();
+
+    } catch (error) {
+        console.error('Failed to load hidden nodes:', error);
+    }
+}
+
+async function reloadMainGraph() {
+    try {
+        state.graph = await api.getGraph(false);
+
+        state.cy.elements().remove();
+
+        const elements = {
+            nodes: state.graph.nodes.map(node => ({
+                data: {
+                    id: node.id,
+                    label: node.label,
+                    directory: node.directory,
+                    extension: node.extension,
+                    type: node.type,
+                    important: node.important || false,
+                    hidden: false
+                }
+            })),
+            edges: state.graph.edges.map((edge, idx) => ({
+                data: {
+                    id: `edge-${idx}`,
+                    source: edge.source,
+                    target: edge.target
+                }
+            }))
+        };
+
+        state.cy.add(elements.nodes);
+        state.cy.add(elements.edges);
+
+        // Update important nodes set
+        state.importantNodes.clear();
+        state.graph.nodes.forEach(node => {
+            if (node.important) {
+                state.importantNodes.add(node.id);
             }
         });
-    }
 
-    return false;
+        // Run layout and store positions
+        const layout = state.cy.layout({
+            name: 'dagre',
+            rankDir: 'TB',
+            nodeSep: 60,
+            rankSep: 80,
+            animate: true,
+            animationDuration: 400,
+            fit: true,
+            padding: 50
+        });
+
+        layout.one('layoutstop', () => {
+            originalPositions = {};
+            state.cy.nodes().forEach(node => {
+                originalPositions[node.id()] = { ...node.position() };
+            });
+        });
+
+        layout.run();
+
+        updateStats();
+
+    } catch (error) {
+        console.error('Failed to reload graph:', error);
+    }
 }
 
 // ============================================
@@ -568,21 +664,16 @@ function highlightNode(nodeId) {
     const connectedNodes = neighborhood.nodes();
     const connectedEdges = neighborhood.edges();
 
-    // Dim all elements
     state.cy.elements().addClass('dimmed');
 
-    // Highlight the node
     node.removeClass('dimmed').addClass('highlighted');
 
-    // Highlight connected elements
     connectedNodes.removeClass('dimmed').addClass('connected');
     connectedEdges.removeClass('dimmed').addClass('highlighted');
 
-    // Also highlight outgoing edges and nodes
     node.outgoers('edge').removeClass('dimmed').addClass('highlighted');
     node.outgoers('node').removeClass('dimmed').addClass('connected');
 
-    // Center on node
     state.cy.animate({
         center: { eles: node },
         zoom: Math.min(state.cy.zoom(), 1.5),
@@ -614,13 +705,21 @@ async function showFileDetails(path) {
     const fileItems = document.getElementById('file-items');
     const importantBtn = document.getElementById('mark-important-btn');
     const importantText = document.getElementById('important-text');
+    const hideBtn = document.getElementById('hide-node-btn');
+    const hideText = document.getElementById('hide-text');
 
     fileName.textContent = path.split('/').pop();
     filePath.textContent = path;
 
+    // Update important button state
     const isImportant = state.importantNodes.has(path);
     importantBtn.classList.toggle('active', isImportant);
-    importantText.textContent = isImportant ? 'Marked Important' : 'Mark as Important';
+    importantText.textContent = isImportant ? 'Important ✓' : 'Important';
+
+    // Update hide button state
+    const isHidden = state.hiddenNodes.has(path);
+    hideBtn.classList.toggle('active', isHidden);
+    hideText.textContent = isHidden ? 'Unhide' : 'Hide';
 
     panel.classList.remove('hidden');
     document.getElementById('search-results').classList.add('hidden');
@@ -689,22 +788,16 @@ function hideFileDetails() {
 // Search
 // ============================================
 
-/**
- * Parse search query for exact match parts (in quotes) vs semantic parts.
- * Example: 'engine "cli.py"' -> { semantic: 'engine', exact: ['cli.py'] }
- */
 function parseSearchQuery(query) {
     const exactMatches = [];
     let semanticPart = query;
 
-    // Extract quoted parts
     const quoteRegex = /"([^"]+)"/g;
     let match;
     while ((match = quoteRegex.exec(query)) !== null) {
         exactMatches.push(match[1].toLowerCase());
     }
 
-    // Remove quoted parts from semantic query
     semanticPart = query.replace(quoteRegex, '').trim();
 
     return {
@@ -720,18 +813,14 @@ async function performSearch() {
     if (!rawQuery) return;
 
     const resultsContainer = document.getElementById('search-results');
-
-    // Parse the query
     const parsed = parseSearchQuery(rawQuery);
 
     try {
-        // Clear previous highlights
         clearSearchHighlight();
 
         let results = [];
         const graph = state.graph;
 
-        // Step 1: If there are exact matches, filter by those first
         let candidateNodes = graph.nodes;
 
         if (parsed.hasExact) {
@@ -744,37 +833,30 @@ async function performSearch() {
             });
         }
 
-        // Step 2: If there's a semantic part, search semantically within candidates
         if (parsed.hasSemantic && candidateNodes.length > 0) {
             const data = await api.search(parsed.semantic, true);
             if (data.results) {
-                // Filter semantic results to only include candidates
                 const candidateIds = new Set(candidateNodes.map(n => n.id));
                 results = data.results.filter(r => candidateIds.has(r.path));
             }
         } else if (parsed.hasExact) {
-            // Only exact matches, no semantic part
             results = candidateNodes.map(node => ({
                 path: node.id,
                 label: node.label,
                 score: 1.0
             }));
         } else {
-            // Pure semantic search (no quotes)
             const data = await api.search(rawQuery, true);
             results = data.results || [];
         }
 
         if (results.length > 0) {
-            // Store search results
             results.forEach(result => {
                 state.searchResults.add(result.path);
             });
 
-            // Update search count
             updateSearchCount();
 
-            // Show results panel
             resultsContainer.innerHTML = results.map(result => `
                 <div class="search-result-item" data-path="${result.path}">
                     <div class="name">${result.label}</div>
@@ -783,7 +865,6 @@ async function performSearch() {
             `).join('');
             resultsContainer.classList.remove('hidden');
 
-            // Add click handlers
             resultsContainer.querySelectorAll('.search-result-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const path = item.dataset.path;
@@ -793,7 +874,6 @@ async function performSearch() {
                 });
             });
 
-            // Highlight nodes in graph
             state.cy.elements().addClass('search-dimmed');
 
             results.forEach(result => {
@@ -803,7 +883,6 @@ async function performSearch() {
                 }
             });
 
-            // Show edges between matched nodes
             state.cy.edges().forEach(edge => {
                 const sourceId = edge.source().id();
                 const targetId = edge.target().id();
@@ -825,6 +904,15 @@ function updateSearchCount() {
     const countEl = document.getElementById('search-count');
     if (state.searchResults.size > 0) {
         countEl.textContent = `(${state.searchResults.size})`;
+    } else {
+        countEl.textContent = '';
+    }
+}
+
+function updateHiddenCount() {
+    const countEl = document.getElementById('hidden-count');
+    if (state.hiddenNodes.size > 0) {
+        countEl.textContent = `(${state.hiddenNodes.size})`;
     } else {
         countEl.textContent = '';
     }
@@ -855,7 +943,7 @@ async function toggleImportant() {
         const importantBtn = document.getElementById('mark-important-btn');
         const importantText = document.getElementById('important-text');
         importantBtn.classList.toggle('active', newImportance);
-        importantText.textContent = newImportance ? 'Marked Important' : 'Mark as Important';
+        importantText.textContent = newImportance ? 'Important ✓' : 'Important';
 
         updateStats();
 
@@ -869,6 +957,49 @@ async function toggleImportant() {
 }
 
 // ============================================
+// Hidden Nodes
+// ============================================
+
+async function toggleHidden() {
+    if (!state.selectedNode) return;
+
+    const isCurrentlyHidden = state.hiddenNodes.has(state.selectedNode);
+    const newHidden = !isCurrentlyHidden;
+
+    try {
+        await api.setHidden(state.selectedNode, newHidden);
+
+        if (newHidden) {
+            state.hiddenNodes.add(state.selectedNode);
+        } else {
+            state.hiddenNodes.delete(state.selectedNode);
+        }
+
+        // Update button
+        const hideBtn = document.getElementById('hide-node-btn');
+        const hideText = document.getElementById('hide-text');
+        hideBtn.classList.toggle('active', newHidden);
+        hideText.textContent = newHidden ? 'Unhide' : 'Hide';
+
+        updateHiddenCount();
+
+        // If we just hid a node and we're in 'all' view, reload the graph
+        if (newHidden && state.currentFilter !== 'hidden') {
+            hideFileDetails();
+            clearHighlight();
+            await reloadMainGraph();
+        } else if (!newHidden && state.currentFilter === 'hidden') {
+            // We unhid a node while viewing hidden, reload hidden view
+            await loadHiddenNodes();
+            hideFileDetails();
+        }
+
+    } catch (error) {
+        console.error('Failed to update hidden status:', error);
+    }
+}
+
+// ============================================
 // Stats
 // ============================================
 
@@ -876,6 +1007,7 @@ function updateStats() {
     document.getElementById('nodes-count').textContent = state.graph.nodes.length;
     document.getElementById('edges-count').textContent = state.graph.edges.length;
     document.getElementById('important-count').textContent = state.importantNodes.size;
+    updateHiddenCount();
 }
 
 // ============================================

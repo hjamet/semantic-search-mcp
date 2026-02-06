@@ -387,21 +387,28 @@ body {
     word-break: break-all;
 }
 
+/* Action Buttons Container */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
 /* Important Button */
 .important-btn {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
+    gap: 6px;
+    padding: 10px 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
     transition: all var(--transition-fast);
-    margin-bottom: 20px;
 }
 
 .important-btn:hover {
@@ -416,7 +423,41 @@ body {
 }
 
 .important-btn .star-icon {
-    font-size: 16px;
+    font-size: 14px;
+}
+
+/* Hide Button */
+.hide-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.hide-btn:hover {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.hide-btn.active {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+/* Filter button for hidden */
+.filter-btn[data-filter="hidden"].active {
+    background: var(--error);
+    border-color: var(--error);
 }
 
 /* File Items */

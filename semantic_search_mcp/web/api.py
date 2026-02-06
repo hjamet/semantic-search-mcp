@@ -29,6 +29,11 @@ class ImportantRequest(BaseModel):
     important: bool
 
 
+class HiddenRequest(BaseModel):
+    path: str
+    hidden: bool
+
+
 class SearchResult(BaseModel):
     path: str
     label: str
@@ -40,6 +45,7 @@ _analyzer: Optional[DependencyAnalyzer] = None
 _engine = None  # SemanticEngine for semantic search
 _repo_path: Optional[str] = None
 _important_nodes_path: Optional[Path] = None
+_hidden_nodes_path: Optional[Path] = None
 
 
 def get_important_nodes() -> List[str]:
@@ -59,6 +65,39 @@ def save_important_nodes(nodes: List[str]):
         _important_nodes_path.parent.mkdir(parents=True, exist_ok=True)
         with open(_important_nodes_path, 'w') as f:
             json.dump(nodes, f, indent=2)
+
+
+def get_hidden_nodes() -> List[str]:
+    """Load hidden nodes from storage."""
+    if _hidden_nodes_path and _hidden_nodes_path.exists():
+        try:
+            with open(_hidden_nodes_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
+
+def save_hidden_nodes(nodes: List[str]):
+    """Save hidden nodes to storage."""
+    if _hidden_nodes_path:
+        _hidden_nodes_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_hidden_nodes_path, 'w') as f:
+            json.dump(nodes, f, indent=2)
+
+
+def init_default_hidden_nodes(graph_nodes: List[dict]) -> List[str]:
+    """Initialize default hidden nodes (like __init__.py) if file doesn't exist."""
+    if _hidden_nodes_path and not _hidden_nodes_path.exists():
+        # Hide __init__.py files by default
+        default_hidden = [
+            node['id'] for node in graph_nodes 
+            if node['label'] == '__init__.py'
+        ]
+        if default_hidden:
+            save_hidden_nodes(default_hidden)
+            return default_hidden
+    return get_hidden_nodes()
 
 
 @asynccontextmanager
@@ -93,19 +132,69 @@ async def root():
 
 
 @app.get("/api/graph")
-async def get_graph():
-    """Get the complete dependency graph."""
+async def get_graph(include_hidden: bool = False):
+    """
+    Get the complete dependency graph.
+    
+    Args:
+        include_hidden: If True, include hidden nodes. Default False.
+    """
     if not _analyzer:
         raise HTTPException(status_code=503, detail="Analyzer not initialized")
     
     graph = _analyzer.build_graph()
     important = get_important_nodes()
     
-    # Mark important nodes
+    # Initialize default hidden nodes on first load
+    hidden = init_default_hidden_nodes(graph['nodes'])
+    hidden_set = set(hidden)
+    
+    # Mark important and hidden nodes
     for node in graph['nodes']:
         node['important'] = node['id'] in important
+        node['hidden'] = node['id'] in hidden_set
+    
+    # Filter out hidden nodes unless requested
+    if not include_hidden:
+        visible_nodes = [n for n in graph['nodes'] if not n['hidden']]
+        visible_ids = {n['id'] for n in visible_nodes}
+        visible_edges = [
+            e for e in graph['edges'] 
+            if e['source'] in visible_ids and e['target'] in visible_ids
+        ]
+        graph['nodes'] = visible_nodes
+        graph['edges'] = visible_edges
     
     return graph
+
+
+@app.get("/api/graph/hidden")
+async def get_hidden_graph():
+    """Get only the hidden nodes and their connections."""
+    if not _analyzer:
+        raise HTTPException(status_code=503, detail="Analyzer not initialized")
+    
+    graph = _analyzer.build_graph()
+    hidden = get_hidden_nodes()
+    hidden_set = set(hidden)
+    important = get_important_nodes()
+    
+    # Filter to only hidden nodes
+    hidden_nodes = [n for n in graph['nodes'] if n['id'] in hidden_set]
+    hidden_ids = {n['id'] for n in hidden_nodes}
+    
+    # Mark importance
+    for node in hidden_nodes:
+        node['important'] = node['id'] in important
+        node['hidden'] = True
+    
+    # Get edges between hidden nodes
+    hidden_edges = [
+        e for e in graph['edges']
+        if e['source'] in hidden_ids and e['target'] in hidden_ids
+    ]
+    
+    return {'nodes': hidden_nodes, 'edges': hidden_edges}
 
 
 @app.get("/api/file/{file_path:path}")
@@ -136,6 +225,9 @@ async def search_nodes(request: SearchRequest):
     graph = _analyzer.build_graph()
     results = []
     
+    # Get hidden nodes to exclude from results
+    hidden = set(get_hidden_nodes())
+    
     if request.semantic and _engine:
         # Use semantic search
         try:
@@ -143,7 +235,7 @@ async def search_nodes(request: SearchRequest):
             seen_files = set()
             for res in semantic_results:
                 file_path = res.get('file_path', '')
-                if file_path and file_path not in seen_files:
+                if file_path and file_path not in seen_files and file_path not in hidden:
                     seen_files.add(file_path)
                     # Find matching node
                     for node in graph['nodes']:
@@ -161,12 +253,13 @@ async def search_nodes(request: SearchRequest):
     # Text matching fallback or complement
     if not results:
         for node in graph['nodes']:
-            if query in node['id'].lower() or query in node['label'].lower():
-                results.append({
-                    'path': node['id'],
-                    'label': node['label'],
-                    'score': 1.0 if query == node['label'].lower() else 0.7
-                })
+            if node['id'] not in hidden:
+                if query in node['id'].lower() or query in node['label'].lower():
+                    results.append({
+                        'path': node['id'],
+                        'label': node['label'],
+                        'score': 1.0 if query == node['label'].lower() else 0.7
+                    })
     
     # Sort by score
     results.sort(key=lambda x: x['score'], reverse=True)
@@ -195,6 +288,28 @@ async def set_important(request: ImportantRequest):
     return {'success': True, 'nodes': nodes}
 
 
+@app.get("/api/hidden")
+async def get_hidden():
+    """Get list of hidden nodes."""
+    return {'nodes': get_hidden_nodes()}
+
+
+@app.post("/api/hidden")
+async def set_hidden(request: HiddenRequest):
+    """Mark or unmark a node as hidden."""
+    nodes = get_hidden_nodes()
+    
+    if request.hidden:
+        if request.path not in nodes:
+            nodes.append(request.path)
+    else:
+        if request.path in nodes:
+            nodes.remove(request.path)
+    
+    save_hidden_nodes(nodes)
+    return {'success': True, 'nodes': nodes}
+
+
 def configure_server(repo_path: str, engine=None):
     """
     Configure the server with repository path and optional semantic engine.
@@ -203,12 +318,13 @@ def configure_server(repo_path: str, engine=None):
         repo_path: Path to the repository to analyze.
         engine: Optional SemanticEngine instance for semantic search.
     """
-    global _analyzer, _engine, _repo_path, _important_nodes_path
+    global _analyzer, _engine, _repo_path, _important_nodes_path, _hidden_nodes_path
     
     _repo_path = repo_path
     _analyzer = DependencyAnalyzer(repo_path)
     _engine = engine
     _important_nodes_path = Path(repo_path) / ".semcp" / "important_nodes.json"
+    _hidden_nodes_path = Path(repo_path) / ".semcp" / "hidden_nodes.json"
 
 
 def start_server(repo_path: str, engine=None, port: int = 8765, open_browser: bool = True):
