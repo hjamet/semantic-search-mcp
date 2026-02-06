@@ -114,9 +114,15 @@ const api = {
     },
 
     async getHidden() {
-        const response = await fetch('/api/hidden');
-        if (!response.ok) throw new Error('Failed to get hidden nodes');
-        return response.json();
+        return fetch('/api/hidden').then(res => res.json());
+    },
+
+    async deleteFile(path) {
+        const res = await fetch(`/api/file/${encodeURIComponent(path)}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Delete failed');
+        return res.json();
     }
 };
 
@@ -477,6 +483,47 @@ function setupEventHandlers() {
     folderToggle.addEventListener('change', (e) => {
         state.showFolders = e.target.checked;
         applyFolderGrouping();
+    });
+
+    // Delete button - double-click to confirm
+    const deleteBtn = document.getElementById('delete-file-btn');
+    const deleteText = document.getElementById('delete-text');
+    let clickTimeout = null;
+
+    deleteBtn.addEventListener('click', async () => {
+        if (clickTimeout) {
+            // Second click within the timeout period
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
+
+            const path = document.getElementById('file-path').textContent;
+            try {
+                deleteBtn.disabled = true;
+                deleteText.textContent = 'Deleting...';
+                await api.deleteFile(path);
+                hideFileDetails();
+                clearHighlight();
+                // Graph refresh is automatic via WebSocket
+            } catch (error) {
+                console.error('Delete failed:', error);
+                deleteText.textContent = 'Error!';
+                setTimeout(() => {
+                    deleteText.textContent = 'Delete';
+                    deleteBtn.disabled = false;
+                    deleteBtn.classList.remove('confirm');
+                }, 2000);
+            }
+        } else {
+            // First click: show confirmation state
+            deleteText.textContent = 'Click again';
+            deleteBtn.classList.add('confirm');
+
+            clickTimeout = setTimeout(() => {
+                deleteText.textContent = 'Delete';
+                deleteBtn.classList.remove('confirm');
+                clickTimeout = null;
+            }, 3000); // 3 seconds to click again
+        }
     });
 
     // Sidebar resize

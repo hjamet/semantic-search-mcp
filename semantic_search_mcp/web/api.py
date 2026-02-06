@@ -426,6 +426,48 @@ async def set_hidden(request: HiddenRequest):
     return {'success': True, 'nodes': nodes}
 
 
+@app.delete("/api/file/{file_path:path}")
+async def delete_file(file_path: str):
+    """Delete a file from disk."""
+    if not _repo_path:
+        raise HTTPException(status_code=503, detail="Server not configured")
+    
+    full_path = Path(_repo_path) / file_path
+    
+    # Security: ensure path is within repo
+    try:
+        if not full_path.resolve().is_relative_to(Path(_repo_path).resolve()):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except (ValueError, RuntimeError):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not full_path.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+    
+    # Remove from important nodes
+    important_nodes = get_important_nodes()
+    if file_path in important_nodes:
+        important_nodes.remove(file_path)
+        save_important_nodes(important_nodes)
+        
+    # Remove from hidden nodes
+    hidden_nodes = get_hidden_nodes()
+    if file_path in hidden_nodes:
+        hidden_nodes.remove(file_path)
+        save_hidden_nodes(hidden_nodes)
+    
+    # Delete the file
+    try:
+        full_path.unlink()
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+    
+    return {"success": True, "deleted": file_path}
+
+
 def configure_server(repo_path: str, engine=None):
     """
     Configure the server with repository path and optional semantic engine.

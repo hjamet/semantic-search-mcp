@@ -42,6 +42,7 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
 - **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (Compound Nodes)
+- **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 
 
 > Pour désactiver : `semcp --no-web`
