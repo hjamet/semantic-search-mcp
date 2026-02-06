@@ -809,13 +809,47 @@ async function loadHiddenNodes() {
 
 async function reloadMainGraph() {
     try {
+        // 1. Save current viewport state
+        const currentZoom = state.cy.zoom();
+        const currentPan = { ...state.cy.pan() };
+
+        // 2. Save current node positions
+        const currentPositions = {};
+        state.cy.nodes().forEach(node => {
+            currentPositions[node.id()] = { ...node.position() };
+        });
+        const currentNodeIds = new Set(state.cy.nodes().map(n => n.id()));
+
+        // 3. Fetch updated graph data
         state.graph = await api.getGraph(false);
         state.fullGraph = await api.getGraph(true);
 
-        state.cy.elements().remove();
+        const newNodeIds = new Set(state.graph.nodes.map(n => n.id));
 
-        const elements = {
-            nodes: state.graph.nodes.map(node => ({
+        // 4. Compute diff
+        const addedNodeIds = [...newNodeIds].filter(id => !currentNodeIds.has(id));
+        const removedNodeIds = [...currentNodeIds].filter(id => !newNodeIds.has(id));
+        const keptNodeIds = [...newNodeIds].filter(id => currentNodeIds.has(id));
+
+        // 5. Remove deleted nodes/edges
+        removedNodeIds.forEach(id => {
+            state.cy.getElementById(id).remove();
+        });
+
+        // 6. Update existing nodes (in case data changed)
+        keptNodeIds.forEach(id => {
+            const nodeData = state.graph.nodes.find(n => n.id === id);
+            if (nodeData) {
+                const cyNode = state.cy.getElementById(id);
+                cyNode.data('important', nodeData.important || false);
+                cyNode.data('label', nodeData.label);
+            }
+        });
+
+        // 7. Add new nodes with positions (if known from originalPositions, else random)
+        const newNodes = state.graph.nodes
+            .filter(node => addedNodeIds.includes(node.id))
+            .map(node => ({
                 data: {
                     id: node.id,
                     label: node.label,
@@ -824,21 +858,35 @@ async function reloadMainGraph() {
                     type: node.type,
                     important: node.important || false,
                     hidden: false
-                }
-            })),
-            edges: state.graph.edges.map((edge, idx) => ({
-                data: {
-                    id: `edge-${idx}`,
-                    source: edge.source,
-                    target: edge.target
-                }
-            }))
-        };
+                },
+                // Place new nodes at center initially
+                position: originalPositions[node.id] || { x: 0, y: 0 }
+            }));
 
-        state.cy.add(elements.nodes);
-        state.cy.add(elements.edges);
+        if (newNodes.length > 0) {
+            state.cy.add(newNodes);
+        }
 
-        // Update important nodes set
+        // 8. Rebuild edges (simpler than diffing)
+        state.cy.edges().remove();
+        const edges = state.graph.edges.map((edge, idx) => ({
+            data: {
+                id: `edge-${idx}`,
+                source: edge.source,
+                target: edge.target
+            }
+        }));
+        state.cy.add(edges);
+
+        // 9. Restore positions for kept nodes
+        keptNodeIds.forEach(id => {
+            const pos = currentPositions[id];
+            if (pos) {
+                state.cy.getElementById(id).position(pos);
+            }
+        });
+
+        // 10. Update important nodes set
         state.importantNodes.clear();
         state.graph.nodes.forEach(node => {
             if (node.important) {
@@ -846,26 +894,43 @@ async function reloadMainGraph() {
             }
         });
 
-        // Run layout and store positions
-        const layout = state.cy.layout({
-            name: 'dagre',
-            rankDir: 'TB',
-            nodeSep: 60,
-            rankSep: 80,
-            animate: true,
-            animationDuration: 400,
-            fit: true,
-            padding: 50
-        });
-
-        layout.one('layoutstop', () => {
-            originalPositions = {};
-            state.cy.nodes().forEach(node => {
-                originalPositions[node.id()] = { ...node.position() };
+        // 11. Only run layout for NEW nodes (if any), without affecting existing positions
+        if (addedNodeIds.length > 0) {
+            // Find a good position for new nodes near their neighbors
+            addedNodeIds.forEach(newId => {
+                const newNode = state.cy.getElementById(newId);
+                const neighbors = newNode.neighborhood('node');
+                if (neighbors.length > 0) {
+                    // Position near average of neighbors
+                    let avgX = 0, avgY = 0;
+                    neighbors.forEach(n => {
+                        avgX += n.position('x');
+                        avgY += n.position('y');
+                    });
+                    avgX /= neighbors.length;
+                    avgY /= neighbors.length;
+                    // Offset slightly to avoid overlap
+                    newNode.position({ x: avgX + 50, y: avgY + 50 });
+                } else {
+                    // No neighbors, place at viewport center
+                    const extent = state.cy.extent();
+                    newNode.position({
+                        x: (extent.x1 + extent.x2) / 2,
+                        y: (extent.y1 + extent.y2) / 2
+                    });
+                }
             });
-        });
 
-        layout.run();
+            // Update originalPositions for new nodes
+            addedNodeIds.forEach(id => {
+                const node = state.cy.getElementById(id);
+                originalPositions[id] = { ...node.position() };
+            });
+        }
+
+        // 12. Restore viewport (zoom and pan)
+        state.cy.zoom(currentZoom);
+        state.cy.pan(currentPan);
 
         updateStats();
 
