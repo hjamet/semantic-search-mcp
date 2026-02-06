@@ -52,12 +52,13 @@ async def handle_list_tools() -> list[types.Tool]:
                 "2) Find and REUSE existing code to avoid reinventing the wheel. "
                 "3) Prevent code duplication. "
                 "Do NOT rely on your previous knowledge; always check the current state of the codebase. "
-                "Use the 'glob' argument to filter for specific types, e.g., '*.md' for documentation or '*.py' for code logic."
+                "Use the 'glob' argument to filter for specific types, e.g., '*.md' for documentation or '*.py' for code logic. "
+                "CRITICAL: The 'query' parameter MUST be written in English for optimal semantic search results."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The natural language query describing what functionality or logic you are looking for (e.g., 'where is authentication handled?')."},
+                    "query": {"type": "string", "description": "The natural language query describing what functionality or logic you are looking for. MUST be in English (e.g., 'where is authentication handled?')."},
                     "glob": {"type": "string", "description": "Optional glob pattern to filter files. HIGHLY RECOMMENDED: use '*.md' to find relevant documentation or '*.py' to find code implementation."}
                 },
                 "required": ["query"],

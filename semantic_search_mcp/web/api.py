@@ -3,19 +3,110 @@ FastAPI Web Server for Dependency Graph Visualization
 
 Provides REST API endpoints for the graph visualization frontend.
 """
+import asyncio
 import json
 import threading
+import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Set
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 import uvicorn
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler, FileModifiedEvent, FileCreatedEvent, FileDeletedEvent
 
 from semantic_search_mcp.graph.dependency_analyzer import DependencyAnalyzer
+
+
+# ============================================
+# WebSocket Connection Manager
+# ============================================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+    
+    async def broadcast(self, message: dict):
+        """Send message to all connected clients."""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        # Clean up disconnected clients
+        for conn in disconnected:
+            self.disconnect(conn)
+
+
+manager = ConnectionManager()
+
+
+# ============================================
+# File Watcher with Debounce
+# ============================================
+
+class GraphFileWatcher(FileSystemEventHandler):
+    """Watches for file changes and triggers graph updates."""
+    
+    WATCHED_EXTENSIONS = {'.py', '.ts', '.js', '.tsx', '.jsx'}
+    DEBOUNCE_SECONDS = 0.5
+    
+    def __init__(self, loop: asyncio.AbstractEventLoop):
+        self.loop = loop
+        self._last_trigger = 0.0
+        self._pending_notify = False
+        self._lock = threading.Lock()
+    
+    def _should_watch(self, path: str) -> bool:
+        """Check if this file type should trigger updates."""
+        return Path(path).suffix in self.WATCHED_EXTENSIONS
+    
+    def _trigger_update(self):
+        """Trigger a debounced graph update notification."""
+        current_time = time.time()
+        
+        with self._lock:
+            if current_time - self._last_trigger < self.DEBOUNCE_SECONDS:
+                return
+            self._last_trigger = current_time
+        
+        # Schedule broadcast on the event loop
+        asyncio.run_coroutine_threadsafe(
+            manager.broadcast({"type": "graph_updated"}),
+            self.loop
+        )
+    
+    def on_modified(self, event):
+        if not event.is_directory and self._should_watch(event.src_path):
+            self._trigger_update()
+    
+    def on_created(self, event):
+        if not event.is_directory and self._should_watch(event.src_path):
+            self._trigger_update()
+    
+    def on_deleted(self, event):
+        if not event.is_directory and self._should_watch(event.src_path):
+            self._trigger_update()
+
+
+# Global observer instance
+_observer: Optional[Observer] = None
+_watcher_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 # Request/Response models
@@ -103,9 +194,22 @@ def init_default_hidden_nodes(graph_nodes: List[dict]) -> List[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown."""
-    # Startup - nothing special needed
+    global _observer, _watcher_loop
+    
+    # Startup - start file watcher if repo path is configured
+    if _repo_path:
+        _watcher_loop = asyncio.get_event_loop()
+        handler = GraphFileWatcher(_watcher_loop)
+        _observer = Observer()
+        _observer.schedule(handler, _repo_path, recursive=True)
+        _observer.start()
+    
     yield
-    # Shutdown - cleanup if needed
+    
+    # Shutdown - stop file watcher
+    if _observer:
+        _observer.stop()
+        _observer.join(timeout=2.0)
 
 
 # Create FastAPI app
@@ -129,6 +233,18 @@ async def root():
     if index_path.exists():
         return FileResponse(index_path)
     return HTMLResponse("<h1>Graph Visualization</h1><p>Static files not found.</p>")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time graph updates."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive, wait for messages (client might send pings)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.get("/api/graph")

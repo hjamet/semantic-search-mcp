@@ -2,7 +2,9 @@
 
 **Semantic Search MCP** est un serveur MCP (Model Context Protocol) conçu pour permettre aux agents AI d'effectuer des recherches sémantiques contextuelles dans votre codebase local. Il indexe intelligemment le dossier de travail courant et offre des outils de recherche précis.
 
-**Nouvelle fonctionnalité** : Visualisation interactive du graphe de dépendances dans le navigateur ! 🎨
+**Nouvelles fonctionnalités** :
+- 🎯 Visualisation interactive du graphe de dépendances dans le navigateur
+- ⚡ Mise à jour temps réel du graphe (WebSocket)
 
 ## Installation
 
@@ -34,6 +36,7 @@ Pour utiliser le serveur sur un repo spécifique :
 Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http://localhost:8765` affichant :
 
 - **Graphe interactif** des fichiers et leurs dépendances (imports)
+- **Mise à jour temps réel** : le graphe se rafraîchit automatiquement lors de modifications de fichiers
 - **Recherche** textuelle ou sémantique pour trouver des fichiers
 - **Focus** sur un noeud pour voir ses dépendances
 - **Panneau latéral** avec fonctions, classes et docstrings
@@ -47,6 +50,7 @@ Dans votre agent (Cursor, Claude, etc.), vous avez accès à l'outil :
 
 - **`semsearch`** : Effectue une recherche sémantique.
   - **MANDATORY** : Utilisez cet outil au début de chaque tâche pour comprendre la structure du code.
+  - **IMPORTANT** : La requête doit être en **anglais** pour des résultats optimaux.
   - *Query* : "How is authentication handled?"
   - *Glob* : "src/*.py" (optionnel)
 
@@ -111,4 +115,5 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Gestion dynamique du contexte
 - [x] Installation simplifiée via uv tool local
 - [x] [Visualisation Graphe de Dépendances](docs/tasks/implement_graph_visualization.md)
+- [x] Mise à jour temps réel du graphe (WebSocket + file watcher)
 

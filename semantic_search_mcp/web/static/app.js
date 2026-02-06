@@ -18,8 +18,45 @@ const state = {
     hiddenNodes: new Set(),
     searchResults: new Set(),
     currentFilter: 'all', // 'all', 'important', 'search', 'hidden'
-    wasInHiddenView: false // Track if we came from hidden view
+    wasInHiddenView: false, // Track if we came from hidden view
+    websocket: null // WebSocket connection for real-time updates
 };
+
+// ============================================
+// WebSocket for Real-Time Updates
+// ============================================
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    state.websocket = new WebSocket(wsUrl);
+
+    state.websocket.onopen = () => {
+        console.log('[WebSocket] Connected for real-time updates');
+    };
+
+    state.websocket.onmessage = async (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'graph_updated') {
+                console.log('[WebSocket] Graph updated, refreshing...');
+                await reloadMainGraph();
+            }
+        } catch (e) {
+            console.warn('[WebSocket] Failed to parse message:', e);
+        }
+    };
+
+    state.websocket.onclose = () => {
+        console.log('[WebSocket] Disconnected, reconnecting in 3s...');
+        setTimeout(connectWebSocket, 3000);
+    };
+
+    state.websocket.onerror = (error) => {
+        console.warn('[WebSocket] Error:', error);
+    };
+}
 
 // ============================================
 // API Functions
@@ -1126,4 +1163,7 @@ function escapeHtml(text) {
 // Initialize on DOM Ready
 // ============================================
 
-document.addEventListener('DOMContentLoaded', initGraph);
+document.addEventListener('DOMContentLoaded', () => {
+    initGraph();
+    connectWebSocket();
+});
