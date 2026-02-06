@@ -34,21 +34,34 @@ echo "📦 Installing specific dependencies..."
 # Force install dependencies in the venv
 uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
 
-# Fix CUDA support: fastembed pulls onnxruntime (CPU), we need onnxruntime-gpu
+# Fix CUDA support: install onnxruntime-gpu alongside onnxruntime
+# Note: fastembed requires onnxruntime, so we keep both
 echo "🎮 Setting up GPU support (CUDA)..."
-"$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
-"$VENV_DIR/bin/pip" install onnxruntime-gpu --force-reinstall --quiet
+"$VENV_DIR/bin/pip" install onnxruntime onnxruntime-gpu --quiet 2>/dev/null || true
 
-# 4. Create Symlinks
-echo "🔗 Creating symlinks in $BIN_DIR..."
+# 4. Create Wrapper Scripts (not symlinks, to ignore active venvs)
+echo "🔗 Creating wrapper scripts in $BIN_DIR..."
 mkdir -p "$BIN_DIR"
 
 # Remove old symlinks/binaries if they exist
 rm -f "$BIN_DIR/semcp"
 rm -f "$BIN_DIR/semantic_search_mcp"
 
-ln -s "$VENV_DIR/bin/semcp" "$BIN_DIR/semcp"
-ln -s "$VENV_DIR/bin/semantic_search_mcp" "$BIN_DIR/semantic_search_mcp"
+# Create semcp wrapper
+cat > "$BIN_DIR/semcp" << 'WRAPPER'
+#!/bin/bash
+# Wrapper to ensure we always use the correct Python environment
+exec "$HOME/.semcp/.venv/bin/python" -m semantic_search_mcp.cli "$@"
+WRAPPER
+chmod +x "$BIN_DIR/semcp"
+
+# Create semantic_search_mcp wrapper
+cat > "$BIN_DIR/semantic_search_mcp" << 'WRAPPER'
+#!/bin/bash
+# Wrapper to ensure we always use the correct Python environment
+exec "$HOME/.semcp/.venv/bin/python" -m semantic_search_mcp.server "$@"
+WRAPPER
+chmod +x "$BIN_DIR/semantic_search_mcp"
 
 # 5. Register in MCP Config
 echo "⚙️  Configuring MCP server..."
