@@ -10,34 +10,34 @@
     --bg-secondary: #12121a;
     --bg-tertiary: #1a1a25;
     --bg-glass: rgba(26, 26, 37, 0.85);
-    
+
     --accent-primary: #6366f1;
     --accent-secondary: #818cf8;
     --accent-tertiary: #a5b4fc;
     --accent-glow: rgba(99, 102, 241, 0.4);
-    
+
     --text-primary: #f1f5f9;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    
+
     --python-color: #3b82f6;
     --js-color: #eab308;
     --important-color: #f59e0b;
     --important-glow: rgba(245, 158, 11, 0.5);
-    
+
     --border-color: rgba(148, 163, 184, 0.1);
     --border-hover: rgba(148, 163, 184, 0.2);
-    
+
     --success: #22c55e;
     --warning: #f59e0b;
     --error: #ef4444;
-    
+
     /* Typography */
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    
+
     /* Spacing */
     --sidebar-width: 320px;
-    
+
     /* Animation */
     --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
@@ -45,13 +45,16 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
-html, body {
+html,
+body {
     height: 100%;
     overflow: hidden;
 }
@@ -98,7 +101,9 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loader-content p {
@@ -147,8 +152,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
 }
 
 /* Search Section */
@@ -241,11 +253,11 @@ body {
     transition: transform var(--transition-fast), background var(--transition-fast);
 }
 
-.toggle-container input:checked + .toggle-slider {
+.toggle-container input:checked+.toggle-slider {
     background: var(--accent-primary);
 }
 
-.toggle-container input:checked + .toggle-slider::after {
+.toggle-container input:checked+.toggle-slider::after {
     transform: translateX(16px);
     background: white;
 }
@@ -552,12 +564,94 @@ body {
     box-shadow: 0 0 8px var(--important-glow);
 }
 
+.legend-color.search-match {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.legend-edge {
+    width: 24px;
+    height: 2px;
+    border-radius: 1px;
+}
+
+.legend-edge.dashed {
+    background: repeating-linear-gradient(90deg,
+            var(--accent-secondary),
+            var(--accent-secondary) 4px,
+            transparent 4px,
+            transparent 8px);
+}
+
+/* Filter Section */
+.filter-section {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.filter-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.filter-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.filter-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text-secondary);
+}
+
+.filter-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+.filter-btn svg {
+    flex-shrink: 0;
+}
+
+.filter-btn[data-filter="important"].active {
+    background: var(--important-color);
+    border-color: var(--important-color);
+}
+
+.filter-btn[data-filter="search"].active {
+    background: var(--success);
+    border-color: var(--success);
+}
+
 /* Graph Container */
 .graph-container {
     flex: 1;
     position: relative;
     background: var(--bg-primary);
-    background-image: 
+    background-image:
         radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
         radial-gradient(circle at 0% 100%, rgba(99, 102, 241, 0.02) 0%, transparent 30%);
 }
@@ -624,8 +718,15 @@ body {
 
 /* Animations */
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .file-details:not(.hidden) {
@@ -646,7 +747,7 @@ body {
         transform: translateX(-100%);
         transition: transform var(--transition-normal);
     }
-    
+
     .sidebar.open {
         transform: translateX(0);
     }

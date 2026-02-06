@@ -12,7 +12,9 @@ const state = {
     cy: null,
     graph: { nodes: [], edges: [] },
     selectedNode: null,
-    importantNodes: new Set()
+    importantNodes: new Set(),
+    searchResults: new Set(),
+    currentFilter: 'all' // 'all', 'important', 'search'
 };
 
 // ============================================
@@ -123,7 +125,7 @@ const cytoscapeStyle = [
             'target-arrow-shape': 'triangle',
             'arrow-scale': 0.8,
             'curve-style': 'bezier',
-            'transition-property': 'line-color, target-arrow-color, width, opacity',
+            'transition-property': 'line-color, target-arrow-color, width, opacity, line-style',
             'transition-duration': '200ms'
         }
     },
@@ -175,7 +177,51 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Search result highlight
+    // Search result highlight - primary match
+    {
+        selector: 'node.search-match',
+        style: {
+            'background-color': '#22c55e',
+            'border-color': '#22c55e',
+            'border-width': 4,
+            'shadow-blur': 20,
+            'shadow-color': 'rgba(34, 197, 94, 0.6)',
+            'shadow-opacity': 1,
+            'z-index': 50
+        }
+    },
+    // Search result highlighted - other nodes dimmed
+    {
+        selector: 'node.search-dimmed',
+        style: {
+            'opacity': 0.25
+        }
+    },
+    {
+        selector: 'edge.search-dimmed',
+        style: {
+            'opacity': 0.1
+        }
+    },
+    // Hidden elements (filtered out)
+    {
+        selector: '.filtered-hidden',
+        style: {
+            'display': 'none'
+        }
+    },
+    // Indirect connection (dashed edge)
+    {
+        selector: 'edge.indirect',
+        style: {
+            'line-style': 'dashed',
+            'line-dash-pattern': [6, 3],
+            'line-color': 'rgba(129, 140, 248, 0.5)',
+            'target-arrow-color': 'rgba(129, 140, 248, 0.5)',
+            'width': 1.5
+        }
+    },
+    // Legacy search-result class (compatibility)
     {
         selector: 'node.search-result',
         style: {
@@ -300,6 +346,14 @@ function setupEventHandlers() {
         if (e.key === 'Enter') performSearch();
     });
 
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filter = btn.dataset.filter;
+            setFilter(filter);
+        });
+    });
+
     // Controls
     document.getElementById('fit-btn').addEventListener('click', () => {
         state.cy.fit(undefined, 50);
@@ -315,7 +369,9 @@ function setupEventHandlers() {
 
     document.getElementById('reset-btn').addEventListener('click', () => {
         clearHighlight();
+        clearSearchHighlight();
         hideFileDetails();
+        setFilter('all');
         state.cy.fit(undefined, 50);
     });
 
@@ -327,6 +383,141 @@ function setupEventHandlers() {
 
     // Important button
     document.getElementById('mark-important-btn').addEventListener('click', toggleImportant);
+}
+
+// ============================================
+// Filter Functions
+// ============================================
+
+function setFilter(filter) {
+    state.currentFilter = filter;
+
+    // Update button states
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+
+    // Apply filter
+    applyFilter();
+}
+
+function applyFilter() {
+    // Remove all filter classes first
+    state.cy.elements().removeClass('filtered-hidden indirect');
+
+    if (state.currentFilter === 'all') {
+        // Show everything
+        return;
+    }
+
+    // Determine which nodes should be visible
+    let visibleNodeIds = new Set();
+
+    if (state.currentFilter === 'important') {
+        visibleNodeIds = new Set(state.importantNodes);
+    } else if (state.currentFilter === 'search') {
+        visibleNodeIds = new Set(state.searchResults);
+    }
+
+    if (visibleNodeIds.size === 0) {
+        // No nodes match the filter
+        state.cy.nodes().addClass('filtered-hidden');
+        state.cy.edges().addClass('filtered-hidden');
+        return;
+    }
+
+    // Find shortest paths between all visible nodes
+    const connectedNodeIds = new Set(visibleNodeIds);
+    const directEdges = new Set();
+    const indirectEdges = new Set();
+
+    // For each pair of visible nodes, check if there's a connection
+    const visibleArray = Array.from(visibleNodeIds);
+    for (let i = 0; i < visibleArray.length; i++) {
+        for (let j = i + 1; j < visibleArray.length; j++) {
+            const nodeA = state.cy.getElementById(visibleArray[i]);
+            const nodeB = state.cy.getElementById(visibleArray[j]);
+
+            if (nodeA.length && nodeB.length) {
+                // Check for direct edge
+                const directEdge = state.cy.edges().filter(edge =>
+                    (edge.source().id() === visibleArray[i] && edge.target().id() === visibleArray[j]) ||
+                    (edge.source().id() === visibleArray[j] && edge.target().id() === visibleArray[i])
+                );
+
+                if (directEdge.length) {
+                    directEdge.forEach(e => directEdges.add(e.id()));
+                } else {
+                    // Check if connected via shortest path
+                    const dijkstra = state.cy.elements().dijkstra(nodeA, null, true);
+                    const pathToB = dijkstra.pathTo(nodeB);
+
+                    if (pathToB.length > 0 && dijkstra.distanceTo(nodeB) < Infinity) {
+                        // Mark as indirect connection
+                        indirectEdges.add(`indirect-${visibleArray[i]}-${visibleArray[j]}`);
+                    }
+                }
+            }
+        }
+    }
+
+    // Hide non-visible nodes
+    state.cy.nodes().forEach(node => {
+        if (!connectedNodeIds.has(node.id())) {
+            node.addClass('filtered-hidden');
+        }
+    });
+
+    // Process edges
+    state.cy.edges().forEach(edge => {
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+
+        // Hide edges where either endpoint is not visible
+        if (!connectedNodeIds.has(sourceId) || !connectedNodeIds.has(targetId)) {
+            edge.addClass('filtered-hidden');
+        }
+    });
+
+    // Add indirect edges visualization
+    // For nodes that are connected via multiple hops, show dashed lines
+    visibleArray.forEach(nodeId => {
+        const node = state.cy.getElementById(nodeId);
+        const neighbors = node.neighborhood('node');
+
+        neighbors.forEach(neighbor => {
+            if (visibleNodeIds.has(neighbor.id())) {
+                // Direct connection exists, mark edge as normal
+                const edge = node.edgesWith(neighbor);
+                edge.removeClass('indirect');
+            }
+        });
+    });
+
+    // For filtered view, mark edges between visible nodes that go through hidden nodes as indirect
+    if (state.currentFilter !== 'all') {
+        state.cy.edges(':visible').forEach(edge => {
+            const sourceId = edge.source().id();
+            const targetId = edge.target().id();
+
+            // If both endpoints are in our visible set but edge goes through intermediate nodes
+            if (visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId)) {
+                // Keep normal style
+            } else if (visibleNodeIds.has(sourceId) || visibleNodeIds.has(targetId)) {
+                // One endpoint is visible, one is not - this shouldn't happen after filtering
+            }
+        });
+    }
+
+    // Run layout on visible nodes only
+    state.cy.nodes(':visible').layout({
+        name: 'dagre',
+        rankDir: 'TB',
+        nodeSep: 60,
+        rankSep: 80,
+        animate: true,
+        animationDuration: 300
+    }).run();
 }
 
 // ============================================
@@ -369,6 +560,11 @@ function highlightNode(nodeId) {
 function clearHighlight() {
     state.cy.elements().removeClass('highlighted connected dimmed search-result');
     state.selectedNode = null;
+}
+
+function clearSearchHighlight() {
+    state.cy.elements().removeClass('search-match search-dimmed');
+    state.searchResults.clear();
 }
 
 // ============================================
@@ -472,9 +668,14 @@ async function performSearch() {
         const data = await api.search(query, semantic);
 
         // Clear previous search highlights
-        state.cy.elements().removeClass('search-result');
+        clearSearchHighlight();
 
         if (data.results && data.results.length > 0) {
+            // Store search results
+            data.results.forEach(result => {
+                state.searchResults.add(result.path);
+            });
+
             // Show results panel
             resultsContainer.innerHTML = data.results.map(result => `
                 <div class="search-result-item" data-path="${result.path}">
@@ -494,13 +695,31 @@ async function performSearch() {
                 });
             });
 
-            // Highlight nodes in graph
+            // Highlight nodes in graph - search matches get special color
+            // First dim all nodes
+            state.cy.elements().addClass('search-dimmed');
+
+            // Then highlight search matches
             data.results.forEach(result => {
                 const node = state.cy.getElementById(result.path);
                 if (node.length) {
-                    node.addClass('search-result');
+                    node.removeClass('search-dimmed').addClass('search-match');
                 }
             });
+
+            // Also show edges between matched nodes
+            state.cy.edges().forEach(edge => {
+                const sourceId = edge.source().id();
+                const targetId = edge.target().id();
+                if (state.searchResults.has(sourceId) && state.searchResults.has(targetId)) {
+                    edge.removeClass('search-dimmed');
+                }
+            });
+
+            // Update filter button to show search is available
+            const searchFilterBtn = document.querySelector('.filter-btn[data-filter="search"]');
+            searchFilterBtn.title = `Show only search results (${data.results.length})`;
+
         } else {
             resultsContainer.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No results found</p>';
             resultsContainer.classList.remove('hidden');
@@ -542,6 +761,11 @@ async function toggleImportant() {
 
         // Update stats
         updateStats();
+
+        // Re-apply filter if we're in important view
+        if (state.currentFilter === 'important') {
+            applyFilter();
+        }
 
     } catch (error) {
         console.error('Failed to update importance:', error);
