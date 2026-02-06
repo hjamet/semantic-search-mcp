@@ -65,38 +65,18 @@ class SemanticEngine:
 
     def _has_cuda(self) -> bool:
         """
-        Detect CUDA availability using multiple methods (lightweight, no torch dependency).
+        Detect CUDA availability for onnxruntime.
         
-        Priority:
-        1. Check onnxruntime providers (most reliable if onnxruntime-gpu is installed)
-        2. Fallback to nvidia-smi check (works even without onnxruntime-gpu)
+        IMPORTANT: We MUST check if onnxruntime has CUDAExecutionProvider available.
+        Just detecting a GPU via nvidia-smi is NOT enough - fastembed will crash
+        if we request a provider that doesn't exist in onnxruntime.
         """
-        # Method 1: Check onnxruntime providers
         try:
             import onnxruntime as ort
             available_providers = ort.get_available_providers()
-            if "CUDAExecutionProvider" in available_providers:
-                return True
+            return "CUDAExecutionProvider" in available_providers
         except ImportError:
-            pass
-        
-        # Method 2: Check nvidia-smi (lightweight fallback)
-        import shutil
-        import subprocess
-        if shutil.which("nvidia-smi"):
-            try:
-                result = subprocess.run(
-                    ["nvidia-smi", "-L"], 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=5
-                )
-                if result.returncode == 0 and "GPU" in result.stdout:
-                    return True
-            except (subprocess.TimeoutExpired, subprocess.SubprocessError):
-                pass
-        
-        return False
+            return False
 
     def _setup_collection(self):
         client = self._get_client()
