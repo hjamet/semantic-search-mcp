@@ -2,6 +2,8 @@
 
 **Semantic Search MCP** est un serveur MCP (Model Context Protocol) conçu pour permettre aux agents AI d'effectuer des recherches sémantiques contextuelles dans votre codebase local. Il indexe intelligemment le dossier de travail courant et offre des outils de recherche précis.
 
+**Nouvelle fonctionnalité** : Visualisation interactive du graphe de dépendances dans le navigateur ! 🎨
+
 ## Installation
 
 ```bash
@@ -25,7 +27,19 @@ Pour utiliser le serveur sur un repo spécifique :
 
 > **Important** : L'outil `semcp` doit être relancé si vous changez de projet (changement de contexte).
 
-### 2. Recherche (MCP Tool)
+### 2. Visualisation du Graphe de Dépendances (Web)
+
+Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http://localhost:8765` affichant :
+
+- **Graphe interactif** des fichiers et leurs dépendances (imports)
+- **Recherche** textuelle ou sémantique pour trouver des fichiers
+- **Focus** sur un noeud pour voir ses dépendances
+- **Panneau latéral** avec fonctions, classes et docstrings
+- **Marquage "Important"** pour mettre en valeur certains fichiers
+
+> Pour désactiver : `semcp --no-web`
+
+### 3. Recherche (MCP Tool)
 
 Dans votre agent (Cursor, Claude, etc.), vous avez accès à l'outil :
 
@@ -40,6 +54,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - **Rôle** : Indexer et rechercher dans le code.
 - **Flux** : L'utilisateur lance `semcp` dans un dossier -> Le serveur MCP se reconfigure -> L'agent utilise l'outil `semsearch`.
 - **Performance** : Utilise une indexation incrémentale pour ne traiter que les changements fichiers (timestamps).
+- **Visualisation** : Graphe interactif des dépendances avec interface web moderne (Cytoscape.js).
 
 
 ## Principaux résultats
@@ -56,24 +71,30 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 
 ```
 .
-├── semantic_search_mcp/ # Code source du serveur et CLI
-├── docs/           # Documentation
-├── README.md       # Ce fichier
-└── install.sh      # Script d'installation
+├── semantic_search_mcp/         # Code source
+│   ├── cli.py                   # CLI principal (semcp)
+│   ├── server.py                # Serveur MCP
+│   ├── indexer/                 # Moteur d'indexation sémantique
+│   ├── graph/                   # Analyseur de dépendances
+│   └── web/                     # Serveur web (FastAPI + frontend)
+│       ├── api.py               # API REST
+│       └── static/              # HTML, CSS, JS
+├── docs/                        # Documentation
+├── README.md                    # Ce fichier
+└── install.sh                   # Script d'installation
 ```
 
 ## Scripts d'entrée principaux
 
 | Commande | Description |
 |----------|-------------|
-| `semcp` | Configure le dossier courant comme cible de recherche |
+| `semcp` | Configure le dossier courant et lance la visualisation web |
+| `semcp --no-web` | Mode sans interface web |
 | `semantic_search_mcp` | Lance le serveur MCP (interne) |
 
 ## Scripts exécutables secondaires & Utilitaires
 
 *(Aucun pour l'instant)*
-
-## Roadmap
 
 ## Roadmap
 
@@ -87,3 +108,5 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Refine Tool Description](docs/tasks/refine_tool_description.md)
 - [x] Gestion dynamique du contexte
 - [x] Installation simplifiée via uv tool local
+- [x] [Visualisation Graphe de Dépendances](docs/tasks/implement_graph_visualization.md)
+

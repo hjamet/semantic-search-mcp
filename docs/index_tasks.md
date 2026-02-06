@@ -12,3 +12,5 @@ Ce dossier contient les spécifications des tâches techniques réalisées sur l
 | [Fix Install Script](tasks/fix_install_script.md) | Correction install dependencies | 2026-02-02 | `Up to date` |
 | [Enhance Tool Description](tasks/enhance_tool_description.md) | Amélioration description outil | 2026-02-02 | `Up to date` |
 | [Refine Tool Description](tasks/refine_tool_description.md) | Maximisation utilisation outil | 2026-02-04 | `Up to date` |
+| [Graph Visualization](tasks/implement_graph_visualization.md) | Visualisation graphe dépendances | 2026-02-06 | `Up to date` |
+

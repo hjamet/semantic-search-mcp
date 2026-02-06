@@ -10,6 +10,9 @@ from semantic_search_mcp.indexer.watcher import start_watcher
 app = typer.Typer()
 console = Console()
 
+# Web server port
+WEB_PORT = 8765
+
 def update_context_file(cwd: str):
     settings_dir = Path("~/.semcp").expanduser()
     if not settings_dir.exists():
@@ -54,7 +57,9 @@ def ensure_gitignore(cwd: str):
         console.print("[dim]Added .semcp to .gitignore[/]")
 
 @app.command()
-def main():
+def main(
+    no_web: bool = typer.Option(False, "--no-web", help="Disable the web visualization server")
+):
     """Lancer l'indexeur sémantique sur le dossier actuel."""
     cwd = os.getcwd()
     console.print(f"[bold blue]🚀 Initialisation de Semantic Search pour :[/] {cwd}")
@@ -109,10 +114,27 @@ def main():
                     engine.index_file(file_path)
                     progress.update(task, advance=1)
             
-    console.print("[bold green]✅ Indexation terminée. En attente de changements...[/]")
+    console.print("[bold green]✅ Indexation terminée.[/]")
     
-    # 2. Start Watcher
+    # 3. Start Web Server (unless disabled)
+    if not no_web:
+        try:
+            from semantic_search_mcp.web.api import start_server
+            console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{WEB_PORT}]http://localhost:{WEB_PORT}[/link]")
+            console.print("[dim]Press Ctrl+C to stop.[/]\n")
+            start_server(cwd, engine=engine, port=WEB_PORT, open_browser=True)
+        except ImportError as e:
+            console.print(f"[yellow]⚠ Web server not available: {e}[/]")
+        except Exception as e:
+            console.print(f"[red]Failed to start web server: {e}[/]")
+    else:
+        console.print("[dim]Web visualization disabled (--no-web)[/]")
+    
+    console.print("[dim]En attente de changements...[/]")
+    
+    # 4. Start Watcher
     start_watcher(engine, cwd)
 
 if __name__ == "__main__":
     app()
+
