@@ -1,11 +1,14 @@
 import asyncio
+import json
 import os
-from typing import List, Dict, Any, Optional
+from collections import deque
+from typing import List, Dict, Any, Optional, Set, Tuple
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 from semantic_search_mcp.indexer.engine import SemanticEngine
+from semantic_search_mcp.graph.dependency_analyzer import DependencyAnalyzer
 from pathlib import Path
 
 server = Server("semantic-search-mcp")

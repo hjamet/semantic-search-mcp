@@ -73,7 +73,7 @@ class DependencyAnalyzer:
                             imports.append(rel_path)
             
             return imports
-        except (SyntaxError, UnicodeDecodeError):
+        except (SyntaxError, UnicodeDecodeError, FileNotFoundError, IOError):
             return []
     
     def _resolve_relative_import(self, file_path: Path, module: str, level: int) -> Optional[str]:
@@ -322,7 +322,7 @@ class DependencyAnalyzer:
                         'name': node.name,
                         'type': 'function',
                         'line': node.lineno,
-                        'docstring': docstring[:200] + '...' if len(docstring) > 200 else docstring,
+                        'docstring': docstring,
                         'signature': self._get_function_signature(node)
                     })
                 elif isinstance(node, ast.ClassDef):
@@ -338,14 +338,14 @@ class DependencyAnalyzer:
                                 'name': item.name,
                                 'type': 'method',
                                 'line': item.lineno,
-                                'docstring': method_doc[:150] + '...' if len(method_doc) > 150 else method_doc
+                                'docstring': method_doc
                             })
                     
                     items.append({
                         'name': node.name,
                         'type': 'class',
                         'line': node.lineno,
-                        'docstring': docstring[:200] + '...' if len(docstring) > 200 else docstring,
+                        'docstring': docstring,
                         'methods': methods
                     })
             
