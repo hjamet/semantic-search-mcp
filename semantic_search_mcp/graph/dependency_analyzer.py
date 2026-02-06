@@ -254,6 +254,56 @@ class DependencyAnalyzer:
         else:
             return {'path': file_path, 'items': []}
     
+    def _find_unused_symbols(self, symbols: List[str], exclude_file: Path) -> Set[str]:
+        """
+        Find symbols that are not used anywhere else in the codebase.
+        
+        Args:
+            symbols: List of symbol names to check.
+            exclude_file: The file where symbols are defined (skip searching in it).
+            
+        Returns:
+            Set of symbol names that are not found in other files.
+        """
+        # Entry points and magic methods are never considered unused
+        always_used = {
+            '__init__', '__main__', 'main', 'app', 'setup', 'teardown',
+            '__str__', '__repr__', '__eq__', '__hash__', '__len__', '__iter__',
+            '__enter__', '__exit__', '__call__', '__getitem__', '__setitem__',
+            '__new__', '__del__', '__bool__', '__contains__'
+        }
+        
+        # Filter out always-used symbols
+        symbols_to_check = [s for s in symbols if s not in always_used and not s.startswith('_')]
+        
+        if not symbols_to_check:
+            return set()
+        
+        unused = set(symbols_to_check)
+        
+        # Search in all Python files
+        for file_path in self._get_all_files():
+            if file_path == exclude_file or file_path.suffix not in self.PYTHON_EXTENSIONS:
+                continue
+            
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Check which symbols appear in this file
+                for symbol in list(unused):
+                    # Use word boundary regex to avoid partial matches
+                    if re.search(rf'\b{re.escape(symbol)}\b', content):
+                        unused.discard(symbol)
+                
+                if not unused:
+                    break  # All symbols are used
+                    
+            except (UnicodeDecodeError, IOError):
+                continue
+        
+        return unused
+
     def _get_python_details(self, full_path: Path, rel_path: str) -> Dict[str, Any]:
         """Extract functions, classes, and docstrings from a Python file."""
         try:
@@ -262,10 +312,12 @@ class DependencyAnalyzer:
             
             tree = ast.parse(content)
             items = []
+            all_symbols = []  # Collect all symbols for unused detection
             
             for node in ast.iter_child_nodes(tree):
                 if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
                     docstring = ast.get_docstring(node) or ''
+                    all_symbols.append(node.name)
                     items.append({
                         'name': node.name,
                         'type': 'function',
@@ -276,10 +328,12 @@ class DependencyAnalyzer:
                 elif isinstance(node, ast.ClassDef):
                     docstring = ast.get_docstring(node) or ''
                     methods = []
+                    all_symbols.append(node.name)
                     
                     for item in node.body:
                         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                             method_doc = ast.get_docstring(item) or ''
+                            all_symbols.append(item.name)  # Add method names too
                             methods.append({
                                 'name': item.name,
                                 'type': 'method',
@@ -294,6 +348,16 @@ class DependencyAnalyzer:
                         'docstring': docstring[:200] + '...' if len(docstring) > 200 else docstring,
                         'methods': methods
                     })
+            
+            # Find unused symbols
+            unused_symbols = self._find_unused_symbols(all_symbols, full_path)
+            
+            # Mark items as unused
+            for item in items:
+                item['unused'] = item['name'] in unused_symbols
+                if 'methods' in item:
+                    for method in item['methods']:
+                        method['unused'] = method['name'] in unused_symbols
             
             return {
                 'path': rel_path,

@@ -1046,11 +1046,12 @@ function renderFileItems(items) {
     }
 
     container.innerHTML = items.map(item => {
+        const unusedClass = item.unused ? ' unused' : '';
         if (item.type === 'class') {
             return `
-                <div class="file-item">
+                <div class="file-item${unusedClass}">
                     <div class="file-item-header">
-                        <span class="file-item-type class">class</span>
+                        <span class="file-item-type class">${item.unused ? '⚠ class' : 'class'}</span>
                         <span class="file-item-name">${item.name}</span>
                         <span class="file-item-line">L${item.line}</span>
                     </div>
@@ -1058,13 +1059,15 @@ function renderFileItems(items) {
                     ${item.methods && item.methods.length ? `
                         <div class="file-item-methods">
                             <div class="file-item-methods-title">Methods (${item.methods.length})</div>
-                            ${item.methods.slice(0, 5).map(m => `
-                                <div class="method-item">
-                                    <span class="file-item-type method">def</span>
+                            ${item.methods.slice(0, 5).map(m => {
+                const methodUnusedClass = m.unused ? ' unused' : '';
+                return `
+                                <div class="method-item${methodUnusedClass}">
+                                    <span class="file-item-type method">${m.unused ? '⚠ def' : 'def'}</span>
                                     <span class="method-name">${m.name}</span>
                                     <span class="method-line">L${m.line}</span>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                             ${item.methods.length > 5 ? `<div class="method-item" style="color: var(--text-muted);">... and ${item.methods.length - 5} more</div>` : ''}
                         </div>
                     ` : ''}
@@ -1072,9 +1075,9 @@ function renderFileItems(items) {
             `;
         } else {
             return `
-                <div class="file-item">
+                <div class="file-item${unusedClass}">
                     <div class="file-item-header">
-                        <span class="file-item-type function">func</span>
+                        <span class="file-item-type function">${item.unused ? '⚠ func' : 'func'}</span>
                         <span class="file-item-name">${item.signature || item.name}</span>
                         <span class="file-item-line">L${item.line}</span>
                     </div>

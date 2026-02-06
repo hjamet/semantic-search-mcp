@@ -12,6 +12,10 @@ echo "🔄 Installing from local source..."
 # Install in the semcp venv
 uv pip install --python "$VENV_DIR/bin/python" -e . --quiet
 
+# Ensure GPU support (onnxruntime-gpu ONLY - having both causes conflicts)
+"$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
+"$VENV_DIR/bin/pip" install onnxruntime-gpu --quiet 2>/dev/null || true
+
 echo "✅ Installed. Starting semcp..."
 echo ""
 

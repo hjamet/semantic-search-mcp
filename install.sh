@@ -34,10 +34,11 @@ echo "📦 Installing specific dependencies..."
 # Force install dependencies in the venv
 uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
 
-# Fix CUDA support: install onnxruntime-gpu alongside onnxruntime
-# Note: fastembed requires onnxruntime, so we keep both
+# Fix CUDA support: onnxruntime-gpu ONLY (having both causes conflicts)
+# Note: fastembed requires onnxruntime, but onnxruntime-gpu satisfies this
 echo "🎮 Setting up GPU support (CUDA)..."
-"$VENV_DIR/bin/pip" install onnxruntime onnxruntime-gpu --quiet 2>/dev/null || true
+"$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
+"$VENV_DIR/bin/pip" install onnxruntime-gpu --quiet 2>/dev/null || true
 
 # 4. Create Wrapper Scripts (not symlinks, to ignore active venvs)
 echo "🔗 Creating wrapper scripts in $BIN_DIR..."

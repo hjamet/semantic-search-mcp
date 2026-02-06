@@ -625,6 +625,18 @@ body {
     font-size: 11px;
 }
 
+/* Dead code / Unused symbols */
+.file-item.unused .file-item-name,
+.method-item.unused .method-name {
+    color: var(--error);
+}
+
+.file-item.unused .file-item-type,
+.method-item.unused .file-item-type {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+}
+
 /* Stats Section */
 .stats-section {
     display: flex;
