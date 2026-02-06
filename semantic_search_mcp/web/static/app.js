@@ -948,26 +948,58 @@ async function reloadMainGraph() {
 // Folder Grouping Functions
 // ============================================
 
-function generateFolderNodes(nodes) {
-    const folders = new Map();
+function generateFolderHierarchy(nodes) {
+    /**
+     * Generate a complete folder hierarchy with nested compound nodes.
+     * 
+     * For a file in "src/utils/helpers", this creates:
+     * - folder:src (parent: null)
+     * - folder:src/utils (parent: folder:src)
+     * - folder:src/utils/helpers (parent: folder:src/utils)
+     * 
+     * Returns: { folderNodes: [...], fileParents: Map<fileId, parentFolderId> }
+     */
+    const folders = new Map(); // folderId -> { node definition, parent folderId }
+    const fileParents = new Map(); // fileNodeId -> immediate parent folder id
+
     nodes.forEach(node => {
         const dir = node.data('directory');
-        if (dir) {
-            if (!folders.has(dir)) {
-                // Folder hierarchy: we could split and create nested folders, 
-                // but let's stick to flat directories for now as per plan
-                folders.set(dir, {
-                    group: 'nodes',
-                    data: {
-                        id: `folder:${dir}`,
-                        label: dir,
-                        type: 'folder'
-                    }
+        if (!dir) return;
+
+        // Split path into parts
+        const parts = dir.split('/').filter(p => p.length > 0);
+
+        // Create all intermediate folders
+        let currentPath = '';
+        let parentFolderId = null;
+
+        for (let i = 0; i < parts.length; i++) {
+            currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+            const folderId = `folder:${currentPath}`;
+
+            if (!folders.has(folderId)) {
+                folders.set(folderId, {
+                    node: {
+                        group: 'nodes',
+                        data: {
+                            id: folderId,
+                            label: parts[i], // Only show the folder name, not full path
+                            type: 'folder',
+                            fullPath: currentPath
+                        }
+                    },
+                    parent: parentFolderId
                 });
             }
+
+            parentFolderId = folderId;
         }
+
+        // The file's parent is the deepest folder (last in the path)
+        fileParents.set(node.id(), parentFolderId);
     });
-    return Array.from(folders.values());
+
+    return { folders, fileParents };
 }
 
 function applyFolderGrouping() {
@@ -975,44 +1007,84 @@ function applyFolderGrouping() {
 
     state.cy.batch(() => {
         if (state.showFolders) {
-            // 1. Generate and add folder nodes
+            // 1. Generate folder hierarchy
             const currentNodes = state.cy.nodes('[type != "folder"]');
-            const folderNodes = generateFolderNodes(currentNodes);
+            const { folders, fileParents } = generateFolderHierarchy(currentNodes);
 
-            // Only add folders that don't exist
-            folderNodes.forEach(f => {
-                if (state.cy.getElementById(f.data.id).empty()) {
-                    state.cy.add(f);
+            // 2. Add folder nodes (in order from root to leaf for proper parent assignment)
+            // Sort by path depth to ensure parents exist before children
+            const sortedFolders = Array.from(folders.entries())
+                .sort((a, b) => a[0].split('/').length - b[0].split('/').length);
+
+            sortedFolders.forEach(([folderId, { node, parent }]) => {
+                if (state.cy.getElementById(folderId).empty()) {
+                    state.cy.add(node);
+                }
+                // Set folder's parent (for nested folders)
+                if (parent) {
+                    state.cy.getElementById(folderId).move({ parent: parent });
                 }
             });
 
-            // 2. Assign parents
+            // 3. Assign files to their immediate parent folders
             currentNodes.forEach(node => {
-                const dir = node.data('directory');
-                if (dir) {
-                    node.move({ parent: `folder:${dir}` });
+                const parentFolderId = fileParents.get(node.id());
+                if (parentFolderId) {
+                    node.move({ parent: parentFolderId });
                 }
             });
         } else {
-            // 1. Remove parents
+            // 1. Remove parents from all non-folder nodes
             state.cy.nodes('[type != "folder"]').move({ parent: null });
-            // 2. Remove folder nodes
+            // 2. Remove all folder nodes
             state.cy.nodes('[type = "folder"]').remove();
         }
     });
 
-    // 3. Relayout
-    const layout = state.cy.layout({
-        name: 'dagre',
-        rankDir: 'TB',
-        nodeSep: state.showFolders ? 100 : 60,
-        rankSep: state.showFolders ? 120 : 80,
-        animate: true,
-        animationDuration: 500,
-        fit: true,
-        padding: 50
-    });
-    layout.run();
+    // 3. Layout handling
+    if (state.showFolders) {
+        // Run dagre layout for folder grouping
+        const layout = state.cy.layout({
+            name: 'dagre',
+            rankDir: 'TB',
+            nodeSep: 100,
+            rankSep: 120,
+            animate: true,
+            animationDuration: 500,
+            fit: true,
+            padding: 50
+        });
+        layout.run();
+    } else {
+        // Restore original positions when disabling folder grouping
+        if (originalPositions) {
+            state.cy.nodes().forEach(node => {
+                const pos = originalPositions[node.id()];
+                if (pos) {
+                    node.animate({
+                        position: pos,
+                        duration: 400,
+                        easing: 'ease-out'
+                    });
+                }
+            });
+            // Fit view after animation
+            setTimeout(() => state.cy.fit(undefined, 50), 450);
+        } else {
+            // Fallback: run dagre layout if no original positions
+            const layout = state.cy.layout({
+                name: 'dagre',
+                rankDir: 'TB',
+                nodeSep: 60,
+                rankSep: 80,
+                animate: true,
+                animationDuration: 500,
+                fit: true,
+                padding: 50
+            });
+            layout.run();
+        }
+    }
 }
 
 // ============================================
@@ -1027,7 +1099,9 @@ function highlightNode(nodeId) {
     const connectedNodes = neighborhood.nodes();
     const connectedEdges = neighborhood.edges();
 
-    state.cy.elements().addClass('dimmed');
+    // Dim only non-folder nodes to avoid graying out parent containers
+    state.cy.nodes('[type != "folder"]').addClass('dimmed');
+    state.cy.edges().addClass('dimmed');
 
     node.removeClass('dimmed').addClass('highlighted');
 
