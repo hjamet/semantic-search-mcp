@@ -64,11 +64,12 @@ class SemanticEngine:
         return QdrantClient(path=str(self.storage_path / "qdrant"))
 
     def _has_cuda(self) -> bool:
+        """Detect CUDA availability via onnxruntime (lightweight, no torch dependency)."""
         try:
-            import torch
-            return torch.cuda.is_available()
+            import onnxruntime as ort
+            available_providers = ort.get_available_providers()
+            return "CUDAExecutionProvider" in available_providers
         except ImportError:
-            # Fallback check via nvidia-smi or similar if needed
             return False
 
     def _setup_collection(self):
