@@ -11,12 +11,14 @@
 const state = {
     cy: null,
     graph: { nodes: [], edges: [] },
-    hiddenGraph: { nodes: [], edges: [] }, // Separate graph for hidden nodes
+    fullGraph: { nodes: [], edges: [] }, // Full graph including hidden for path finding
+    hiddenGraph: { nodes: [], edges: [] },
     selectedNode: null,
     importantNodes: new Set(),
     hiddenNodes: new Set(),
     searchResults: new Set(),
-    currentFilter: 'all' // 'all', 'important', 'search', 'hidden'
+    currentFilter: 'all', // 'all', 'important', 'search', 'hidden'
+    wasInHiddenView: false // Track if we came from hidden view
 };
 
 // ============================================
@@ -98,7 +100,6 @@ function getNodeSize(node) {
 }
 
 const cytoscapeStyle = [
-    // Nodes
     {
         selector: 'node',
         style: {
@@ -121,7 +122,6 @@ const cytoscapeStyle = [
             'transition-duration': '200ms'
         }
     },
-    // Important nodes glow
     {
         selector: 'node[?important]',
         style: {
@@ -133,7 +133,6 @@ const cytoscapeStyle = [
             'z-index': 10
         }
     },
-    // Edges
     {
         selector: 'edge',
         style: {
@@ -147,7 +146,6 @@ const cytoscapeStyle = [
             'transition-duration': '200ms'
         }
     },
-    // Hover state
     {
         selector: 'node:active, node:selected',
         style: {
@@ -155,7 +153,6 @@ const cytoscapeStyle = [
             'border-color': '#6366f1'
         }
     },
-    // Highlighted (focused) node
     {
         selector: 'node.highlighted',
         style: {
@@ -164,7 +161,6 @@ const cytoscapeStyle = [
             'z-index': 100
         }
     },
-    // Connected edges when node is highlighted
     {
         selector: 'edge.highlighted',
         style: {
@@ -174,7 +170,6 @@ const cytoscapeStyle = [
             'z-index': 100
         }
     },
-    // Connected nodes
     {
         selector: 'node.connected',
         style: {
@@ -182,7 +177,6 @@ const cytoscapeStyle = [
             'border-width': 3
         }
     },
-    // Dimmed elements
     {
         selector: 'node.dimmed',
         style: {
@@ -195,7 +189,6 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Search result highlight
     {
         selector: 'node.search-match',
         style: {
@@ -208,7 +201,6 @@ const cytoscapeStyle = [
             'z-index': 50
         }
     },
-    // Search dimmed
     {
         selector: 'node.search-dimmed',
         style: {
@@ -221,18 +213,16 @@ const cytoscapeStyle = [
             'opacity': 0.1
         }
     },
-    // Indirect connection
     {
         selector: 'edge.indirect',
         style: {
             'line-style': 'dashed',
             'line-dash-pattern': [6, 3],
-            'line-color': 'rgba(129, 140, 248, 0.5)',
-            'target-arrow-color': 'rgba(129, 140, 248, 0.5)',
-            'width': 1.5
+            'line-color': 'rgba(129, 140, 248, 0.6)',
+            'target-arrow-color': 'rgba(129, 140, 248, 0.6)',
+            'width': 2
         }
     },
-    // Hidden node style (for hidden view)
     {
         selector: 'node.hidden-node',
         style: {
@@ -243,7 +233,6 @@ const cytoscapeStyle = [
     }
 ];
 
-// Store original positions for layout restoration
 let originalPositions = null;
 
 // ============================================
@@ -254,6 +243,9 @@ async function initGraph() {
     try {
         // Fetch main graph (without hidden nodes)
         state.graph = await api.getGraph(false);
+
+        // Fetch full graph for indirect connection detection
+        state.fullGraph = await api.getGraph(true);
 
         // Fetch hidden nodes info
         const hiddenData = await api.getHidden();
@@ -369,6 +361,14 @@ function setupEventHandlers() {
         if (e.key === 'Enter') performSearch();
     });
 
+    // Clear search highlight when input is emptied
+    searchInput.addEventListener('input', (e) => {
+        if (e.target.value.trim() === '') {
+            clearSearchHighlight();
+            document.getElementById('search-results').classList.add('hidden');
+        }
+    });
+
     // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -394,6 +394,7 @@ function setupEventHandlers() {
         clearHighlight();
         clearSearchHighlight();
         hideFileDetails();
+        document.getElementById('search-input').value = '';
         setFilter('all');
         state.cy.fit(undefined, 50);
     });
@@ -452,6 +453,7 @@ function setupSidebarResize() {
 // ============================================
 
 function setFilter(filter) {
+    const previousFilter = state.currentFilter;
     state.currentFilter = filter;
 
     // Update button states
@@ -459,21 +461,36 @@ function setFilter(filter) {
         btn.classList.toggle('active', btn.dataset.filter === filter);
     });
 
+    // Track if we're coming from hidden view
+    if (previousFilter === 'hidden' && filter !== 'hidden') {
+        state.wasInHiddenView = true;
+    }
+
     // Apply filter
     applyFilter();
 }
 
 async function applyFilter() {
-    // For hidden filter, we need to load hidden nodes
+    // If coming from hidden view, reload main graph
+    if (state.wasInHiddenView && state.currentFilter !== 'hidden') {
+        state.wasInHiddenView = false;
+        await reloadMainGraph();
+
+        if (state.currentFilter === 'all') {
+            return; // reloadMainGraph already handles 'all' case
+        }
+    }
+
+    // For hidden filter, load hidden nodes
     if (state.currentFilter === 'hidden') {
         await loadHiddenNodes();
         return;
     }
 
     // For other filters, use the normal graph
-    // First, show all elements and remove classes
     state.cy.elements().style('display', 'element');
     state.cy.elements().removeClass('indirect hidden-node');
+    state.cy.edges().style('line-style', 'solid');
 
     if (state.currentFilter === 'all') {
         // Restore original positions
@@ -510,20 +527,28 @@ async function applyFilter() {
         }
     });
 
-    // Process edges
+    // Hide all edges first
+    state.cy.edges().style('display', 'none');
+
+    // Show direct edges between visible nodes
     state.cy.edges().forEach(edge => {
         const sourceId = edge.source().id();
         const targetId = edge.target().id();
-
-        if (!visibleNodeIds.has(sourceId) || !visibleNodeIds.has(targetId)) {
-            edge.style('display', 'none');
+        if (visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId)) {
+            edge.style('display', 'element');
         }
     });
 
-    // Run layout on visible nodes
+    // Find and add indirect connections
+    await addIndirectConnections(visibleNodeIds);
+
+    // Run layout on visible elements
     const visibleNodes = state.cy.nodes(':visible');
+    const visibleEdges = state.cy.edges(':visible');
+
     if (visibleNodes.length > 0) {
-        visibleNodes.layout({
+        const elementsToLayout = visibleNodes.union(visibleEdges);
+        elementsToLayout.layout({
             name: 'dagre',
             rankDir: 'TB',
             nodeSep: 80,
@@ -536,12 +561,94 @@ async function applyFilter() {
     }
 }
 
+// Build adjacency list from full graph for path finding
+function buildAdjacencyList() {
+    const adj = {};
+    state.fullGraph.nodes.forEach(n => {
+        adj[n.id] = [];
+    });
+    state.fullGraph.edges.forEach(e => {
+        if (adj[e.source]) {
+            adj[e.source].push(e.target);
+        }
+        if (adj[e.target]) {
+            adj[e.target].push(e.source);
+        }
+    });
+    return adj;
+}
+
+// Check if there's a path between two nodes via hidden nodes only
+function hasIndirectPath(startId, endId, visibleNodeIds, adj) {
+    if (startId === endId) return false;
+
+    const visited = new Set();
+    const queue = [startId];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        const neighbors = adj[current] || [];
+        for (const neighbor of neighbors) {
+            if (neighbor === endId) {
+                return true;
+            }
+            // Only traverse through hidden (non-visible) nodes
+            if (!visibleNodeIds.has(neighbor) && !visited.has(neighbor)) {
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    return false;
+}
+
+async function addIndirectConnections(visibleNodeIds) {
+    const adj = buildAdjacencyList();
+    const visibleArray = Array.from(visibleNodeIds);
+
+    // Check for existing direct edges
+    const existingEdges = new Set();
+    state.cy.edges().forEach(edge => {
+        existingEdges.add(`${edge.source().id()}-${edge.target().id()}`);
+        existingEdges.add(`${edge.target().id()}-${edge.source().id()}`);
+    });
+
+    // Find indirect connections
+    for (let i = 0; i < visibleArray.length; i++) {
+        for (let j = i + 1; j < visibleArray.length; j++) {
+            const nodeAId = visibleArray[i];
+            const nodeBId = visibleArray[j];
+
+            // Skip if already directly connected
+            if (existingEdges.has(`${nodeAId}-${nodeBId}`)) {
+                continue;
+            }
+
+            // Check if there's an indirect path
+            if (hasIndirectPath(nodeAId, nodeBId, visibleNodeIds, adj)) {
+                // Add a dashed edge
+                state.cy.add({
+                    group: 'edges',
+                    data: {
+                        id: `indirect-${nodeAId}-${nodeBId}`,
+                        source: nodeAId,
+                        target: nodeBId
+                    },
+                    classes: 'indirect'
+                });
+            }
+        }
+    }
+}
+
 async function loadHiddenNodes() {
     try {
-        // Fetch hidden nodes graph
         const hiddenGraph = await api.getHiddenGraph();
 
-        // Clear current graph and add hidden nodes
         state.cy.elements().remove();
 
         const elements = {
@@ -569,7 +676,6 @@ async function loadHiddenNodes() {
         state.cy.add(elements.nodes);
         state.cy.add(elements.edges);
 
-        // Run layout
         state.cy.layout({
             name: 'dagre',
             rankDir: 'TB',
@@ -589,6 +695,7 @@ async function loadHiddenNodes() {
 async function reloadMainGraph() {
     try {
         state.graph = await api.getGraph(false);
+        state.fullGraph = await api.getGraph(true);
 
         state.cy.elements().remove();
 
@@ -711,12 +818,10 @@ async function showFileDetails(path) {
     fileName.textContent = path.split('/').pop();
     filePath.textContent = path;
 
-    // Update important button state
     const isImportant = state.importantNodes.has(path);
     importantBtn.classList.toggle('active', isImportant);
     importantText.textContent = isImportant ? 'Important ✓' : 'Important';
 
-    // Update hide button state
     const isHidden = state.hiddenNodes.has(path);
     hideBtn.classList.toggle('active', isHidden);
     hideText.textContent = isHidden ? 'Unhide' : 'Hide';
@@ -975,7 +1080,6 @@ async function toggleHidden() {
             state.hiddenNodes.delete(state.selectedNode);
         }
 
-        // Update button
         const hideBtn = document.getElementById('hide-node-btn');
         const hideText = document.getElementById('hide-text');
         hideBtn.classList.toggle('active', newHidden);
@@ -983,13 +1087,11 @@ async function toggleHidden() {
 
         updateHiddenCount();
 
-        // If we just hid a node and we're in 'all' view, reload the graph
         if (newHidden && state.currentFilter !== 'hidden') {
             hideFileDetails();
             clearHighlight();
             await reloadMainGraph();
         } else if (!newHidden && state.currentFilter === 'hidden') {
-            // We unhid a node while viewing hidden, reload hidden view
             await loadHiddenNodes();
             hideFileDetails();
         }
