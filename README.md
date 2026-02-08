@@ -6,7 +6,7 @@
 - 🎯 Visualisation interactive du graphe de dépendances dans le navigateur
 - ⚡ Mise à jour temps réel du graphe (WebSocket)
 - 🧠 **Analyseur intelligent** : Support du `TYPE_CHECKING`, imports relatifs complexes et fallbacks (try/except)
-- 🛡️ **Robustesse Qdrant** : Gestion automatique des verrous orphelins via détection de PID (blindage local)
+- 🛡️ **Architecture "Zero-Lock"** : Nouveau moteur vectoriel fait maison (numpy/pickle) éliminant définitivement les erreurs de verrouillage.
 
 ## Installation
 
@@ -137,3 +137,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Suppression de fichiers via Interface Web (Double-click)
 - [x] Détection de code mort (Dead Code Detection)
 - [x] Outil MCP `semgraph` (recherche sémantique + graphe + détails)
+- [x] Remplacement Qdrant par SimpleVectorStore (Zero Lock)

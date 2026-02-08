@@ -1,11 +1,11 @@
+
 import os
 import shutil
 from typing import List, Dict, Any, Optional
 import numpy as np
 from fastembed import TextEmbedding
-from qdrant_client import QdrantClient, models
-from qdrant_client.models import Distance, VectorParams, PointStruct
 from pathlib import Path
+from .simple_store import SimpleVectorStore
 
 class SemanticEngine:
     def __init__(self, repo_path: Optional[str] = None):
@@ -28,7 +28,6 @@ class SemanticEngine:
         
         # Detection GPU
         self.device = "cuda" if self._has_cuda() else "cpu"
-        # On Linux, MPS is not relevant, but let's keep it generic if we want to support Mac
         
         print(f"DEBUG: Initializing SemanticEngine on {self.device}")
         
@@ -41,7 +40,8 @@ class SemanticEngine:
         self.metadata_path = self.storage_path / "index_metadata.json"
         self.metadata = self._load_metadata()
         
-        self._setup_collection()
+        # Initialize Vector Store
+        self.vector_store = SimpleVectorStore(self.storage_path / "vector_store.pkl")
 
     def _load_metadata(self) -> Dict[str, float]:
         import json
@@ -61,87 +61,9 @@ class SemanticEngine:
     def get_metadata(self) -> Dict[str, float]:
         return self.metadata.copy()
 
-    def _get_client(self) -> QdrantClient:
-        """Get a Qdrant client, with automatic orphan lock cleanup."""
-        storage_dir = self.storage_path / "qdrant"
-        lock_file = storage_dir / ".lock"
-        pid_file = self.storage_path / "qdrant.pid"
-
-        try:
-            client = QdrantClient(path=str(storage_dir))
-            # If successful, save our PID
-            with open(pid_file, "w") as f:
-                f.write(str(os.getpid()))
-            return client
-        except Exception as e:
-            error_msg = str(e)
-            if "already accessed" in error_msg.lower() or "lock" in error_msg.lower():
-                print(f"DEBUG: Qdrant lock detected. Checking if orphaned...")
-                if self._check_orphaned_lock(pid_file, lock_file):
-                    print(f"DEBUG: Orphaned lock cleaned. Retrying connection...")
-                    # Retry once
-                    client = QdrantClient(path=str(storage_dir))
-                    with open(pid_file, "w") as f:
-                        f.write(str(os.getpid()))
-                    return client
-            raise e
-
-    def _check_orphaned_lock(self, pid_file: Path, lock_file: Path) -> bool:
-        """
-        Check if a lock is held by a dead process. 
-        If so, clean up and return True.
-        """
-        if not pid_file.exists():
-            # If PID file doesn't exist but lock does, we are in a weird state
-            # but let's be conservative if we can't be sure who owns the lock.
-            if lock_file.exists():
-                print(f"WARNING: Lock file exists but no PID file found. Cleaning up.")
-                self._force_cleanup_lock(lock_file)
-                return True
-            return False
-
-        try:
-            with open(pid_file, "r") as f:
-                pid = int(f.read().strip())
-        except (ValueError, IOError):
-            print(f"WARNING: Corrupted PID file. Cleaning up.")
-            self._force_cleanup_lock(lock_file)
-            return True
-
-        if pid == os.getpid():
-            return False
-
-        # Check if process is alive
-        try:
-            os.kill(pid, 0)
-            # Process is still alive
-            return False
-        except OSError:
-            # Process is dead
-            print(f"INFO: Detected orphaned lock from PID {pid}. Cleaning up.")
-            self._force_cleanup_lock(lock_file)
-            if pid_file.exists():
-                pid_file.unlink()
-            return True
-
-    def _force_cleanup_lock(self, lock_file: Path):
-        """Forcefully remove the lock file."""
-        if lock_file.exists():
-            try:
-                if lock_file.is_dir():
-                    shutil.rmtree(lock_file)
-                else:
-                    lock_file.unlink()
-            except Exception as e:
-                print(f"ERROR: Could not remove lock file: {e}")
-
     def _has_cuda(self) -> bool:
         """
         Detect CUDA availability for onnxruntime.
-        
-        IMPORTANT: We MUST check if onnxruntime has CUDAExecutionProvider available.
-        Just detecting a GPU via nvidia-smi is NOT enough - fastembed will crash
-        if we request a provider that doesn't exist in onnxruntime.
         """
         try:
             import onnxruntime as ort
@@ -149,17 +71,6 @@ class SemanticEngine:
             return "CUDAExecutionProvider" in available_providers
         except ImportError:
             return False
-
-    def _setup_collection(self):
-        client = self._get_client()
-        try:
-            if not client.collection_exists("code_chunks"):
-                client.create_collection(
-                    collection_name="code_chunks",
-                    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-                )
-        finally:
-            client.close()
 
     def chunk_text(self, text: str, file_path: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
         """Simple chunking with line tracking."""
@@ -206,6 +117,10 @@ class SemanticEngine:
                 content = f.read()
             
             relative_path = os.path.relpath(file_path, os.getcwd())
+            
+            # First clean up existing embeddings for this file
+            self.vector_store.delete(relative_path)
+            
             chunks = self.chunk_text(content, relative_path)
             
             if not chunks:
@@ -216,20 +131,9 @@ class SemanticEngine:
             contents = [c["content"] for c in chunks]
             embeddings = list(self.model.embed(contents))
             
-            points = []
-            for i, (chunk, vector) in enumerate(zip(chunks, embeddings)):
-                points.append(PointStruct(
-                    id=hash(f"{relative_path}_{chunk['start_line']}_{i}"),
-                    vector=vector.tolist(),
-                    payload=chunk
-                ))
-            
-            # Upsert points
-            client = self._get_client()
-            try:
-                client.upsert(collection_name="code_chunks", points=points)
-            finally:
-                client.close()
+            # Add to vector store
+            # embeddings is a list of numpy arrays, compatible with SimpleVectorStore.add
+            self.vector_store.add(embeddings, chunks)
             
             # Update metadata
             self.metadata[relative_path] = os.path.getmtime(file_path)
@@ -240,21 +144,7 @@ class SemanticEngine:
 
     def delete_file(self, file_path: str):
         relative_path = os.path.relpath(file_path, os.getcwd())
-        client = self._get_client()
-        try:
-            client.delete(
-                collection_name="code_chunks",
-                points_selector=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="file_path",
-                            match=models.MatchValue(value=relative_path)
-                        )
-                    ]
-                )
-            )
-        finally:
-            client.close()
+        self.vector_store.delete(relative_path)
             
         if relative_path in self.metadata:
             del self.metadata[relative_path]
@@ -262,14 +152,6 @@ class SemanticEngine:
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         query_vector = list(self.model.embed([query]))[0]
-        client = self._get_client()
-        try:
-            results = client.query_points(
-                collection_name="code_chunks",
-                query=query_vector.tolist(),
-                limit=limit,
-                with_payload=True
-            ).points
-            return [hit.payload for hit in results]
-        finally:
-            client.close()
+        # query_vector is a numpy array (generator -> list -> first item)
+        # SimpleVectorStore.search handles normalization and searching
+        return self.vector_store.search(query_vector, limit=limit)
