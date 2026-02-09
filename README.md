@@ -43,11 +43,13 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Focus** sur un noeud pour voir **toute sa descendance** (successeurs transitifs) et ses importeurs directs
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
-- **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (**Dossiers de bas niveau uniquement** pour une clarté maximale)
+- **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire
+- **Navigation hiérarchique** : Boutons ▲/▼ pour monter/descendre dans l'arborescence des dossiers, avec indicateur de profondeur
+- **Hide/Unhide de dossiers** : Cliquez sur un dossier pour cacher/afficher tous ses fichiers d'un coup
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 - **Détection de code mort** : Affichage en rouge des fonctions/classes non utilisées (dead code)
 - **Stabilité de la vue** : Les mises à jour temps réel préservent la position et le zoom courants
-- **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) pour un graphe sans bruit.
+- **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) avec détection automatique des source roots (`src/`, `lib/`, etc.) pour un graphe sans bruit.
 
 
 > Pour désactiver : `semcp --no-web`

@@ -106,11 +106,47 @@
                     <span class="toggle-slider"></span>
                     <span class="toggle-text">Group by folder</span>
                 </label>
+                <div class="depth-controls hidden" id="depth-controls">
+                    <button id="depth-up-btn" class="depth-btn" title="Merge up (less detail)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M18 15l-6-6-6 6"></path>
+                        </svg>
+                    </button>
+                    <span class="depth-indicator" id="depth-indicator">1/1</span>
+                    <button id="depth-down-btn" class="depth-btn" title="Expand (more detail)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M6 9l6 6 6-6"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
 
             <!-- Search results -->
             <div id="search-results" class="search-results hidden"></div>
+
+            <!-- Folder details panel -->
+            <div id="folder-details" class="file-details hidden">
+                <div class="details-header">
+                    <h2 id="folder-name">folder/</h2>
+                    <button id="close-folder-details" class="close-btn" title="Close">×</button>
+                </div>
+                <div class="details-path" id="folder-path">/path/to/folder</div>
+                <div class="folder-stats">
+                    <span class="folder-stat"><strong id="folder-file-count">0</strong> files</span>
+                    <span class="folder-stat"><strong id="folder-hidden-count">0</strong> hidden</span>
+                </div>
+                <div class="action-buttons">
+                    <button id="hide-folder-btn" class="hide-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                            <path d="m1 1 22 22"></path>
+                        </svg>
+                        <span id="hide-folder-text">Hide Folder</span>
+                    </button>
+                </div>
+            </div>
 
             <!-- File details panel -->
             <div id="file-details" class="file-details hidden">

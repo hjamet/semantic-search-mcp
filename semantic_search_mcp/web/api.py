@@ -125,6 +125,11 @@ class HiddenRequest(BaseModel):
     hidden: bool
 
 
+class HiddenFolderRequest(BaseModel):
+    directory: str
+    hidden: bool
+
+
 class SearchResult(BaseModel):
     path: str
     label: str
@@ -424,6 +429,38 @@ async def set_hidden(request: HiddenRequest):
     
     save_hidden_nodes(nodes)
     return {'success': True, 'nodes': nodes}
+
+
+@app.post("/api/hidden/folder")
+async def set_folder_hidden(request: HiddenFolderRequest):
+    """Hide or unhide all files in a folder (by directory prefix)."""
+    if not _analyzer:
+        raise HTTPException(status_code=503, detail="Analyzer not initialized")
+    
+    graph = _analyzer.build_graph()
+    
+    # Find all file nodes whose directory starts with the given prefix
+    matching_files = [
+        node['id'] for node in graph['nodes']
+        if node.get('directory', '').startswith(request.directory)
+    ]
+    
+    if not matching_files:
+        raise HTTPException(status_code=404, detail=f"No files found in directory: {request.directory}")
+    
+    nodes = get_hidden_nodes()
+    hidden_set = set(nodes)
+    
+    if request.hidden:
+        for file_id in matching_files:
+            if file_id not in hidden_set:
+                hidden_set.add(file_id)
+                nodes.append(file_id)
+    else:
+        nodes = [n for n in nodes if n not in set(matching_files)]
+    
+    save_hidden_nodes(nodes)
+    return {'success': True, 'nodes': nodes, 'affected_count': len(matching_files)}
 
 
 @app.delete("/api/file/{file_path:path}")
