@@ -934,9 +934,9 @@ async function reloadMainGraph() {
 
         updateStats();
 
-        // Re-apply folder grouping if enabled
+        // Re-apply folder grouping if enabled (preserve viewport during reload)
         if (state.showFolders) {
-            applyFolderGrouping();
+            applyFolderGrouping(true);
         }
 
     } catch (error) {
@@ -988,7 +988,7 @@ function generateFolderHierarchy(nodes) {
     return { folders, fileParents };
 }
 
-function applyFolderGrouping() {
+function applyFolderGrouping(preserveViewport = false) {
     if (!state.cy) return;
 
     state.cy.batch(() => {
@@ -1020,8 +1020,8 @@ function applyFolderGrouping() {
     });
 
     // 3. Layout handling
-    if (state.showFolders) {
-        // Run dagre layout for folder grouping
+    if (state.showFolders && !preserveViewport) {
+        // Run dagre layout for folder grouping (only on manual toggle)
         const layout = state.cy.layout({
             name: 'dagre',
             rankDir: 'TB',
@@ -1033,7 +1033,7 @@ function applyFolderGrouping() {
             padding: 50
         });
         layout.run();
-    } else {
+    } else if (!state.showFolders) {
         // Restore original positions when disabling folder grouping
         if (originalPositions) {
             state.cy.nodes().forEach(node => {
@@ -1073,9 +1073,14 @@ function highlightNode(nodeId) {
     state.cy.elements().removeClass('highlighted connected dimmed');
 
     const node = state.cy.getElementById(nodeId);
-    const neighborhood = node.neighborhood();
-    const connectedNodes = neighborhood.nodes();
-    const connectedEdges = neighborhood.edges();
+
+    // Collect all descendants (transitive outgoers) via Cytoscape's successors()
+    const allDescendantNodes = node.successors('node');
+    const allDescendantEdges = node.successors('edge');
+
+    // Also include direct incomers (who imports this node)
+    const incomingEdges = node.incomers('edge');
+    const incomingNodes = node.incomers('node');
 
     // Dim only non-folder nodes to avoid graying out parent containers
     state.cy.nodes('[type != "folder"]').addClass('dimmed');
@@ -1083,11 +1088,13 @@ function highlightNode(nodeId) {
 
     node.removeClass('dimmed').addClass('highlighted');
 
-    connectedNodes.removeClass('dimmed').addClass('connected');
-    connectedEdges.removeClass('dimmed').addClass('highlighted');
+    // Highlight all descendants (full transitive closure)
+    allDescendantNodes.removeClass('dimmed').addClass('connected');
+    allDescendantEdges.removeClass('dimmed').addClass('highlighted');
 
-    node.outgoers('edge').removeClass('dimmed').addClass('highlighted');
-    node.outgoers('node').removeClass('dimmed').addClass('connected');
+    // Highlight direct incomers
+    incomingNodes.removeClass('dimmed').addClass('connected');
+    incomingEdges.removeClass('dimmed').addClass('highlighted');
 
     state.cy.animate({
         center: { eles: node },

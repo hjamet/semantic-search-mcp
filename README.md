@@ -40,12 +40,13 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Graphe interactif** des fichiers et leurs dépendances (imports)
 - **Mise à jour temps réel** : le graphe se rafraîchit automatiquement lors de modifications de fichiers
 - **Recherche** textuelle ou sémantique pour trouver des fichiers
-- **Focus** sur un noeud pour voir ses dépendances
+- **Focus** sur un noeud pour voir **toute sa descendance** (successeurs transitifs) et ses importeurs directs
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
 - **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire (**Dossiers de bas niveau uniquement** pour une clarté maximale)
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 - **Détection de code mort** : Affichage en rouge des fonctions/classes non utilisées (dead code)
+- **Stabilité de la vue** : Les mises à jour temps réel préservent la position et le zoom courants
 - **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) pour un graphe sans bruit.
 
 
@@ -138,3 +139,5 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Détection de code mort (Dead Code Detection)
 - [x] Outil MCP `semgraph` (recherche sémantique + graphe + détails)
 - [x] Remplacement Qdrant par SimpleVectorStore (Zero Lock)
+- [x] Fix stabilité vue (préservation viewport lors des updates WebSocket)
+- [x] Highlight descendance complète (successeurs transitifs + importeurs directs)
