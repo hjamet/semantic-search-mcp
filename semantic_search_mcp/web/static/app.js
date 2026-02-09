@@ -766,11 +766,19 @@ async function applyFilter() {
         return;
     }
 
-    // Hide non-visible nodes (skip folder compound nodes)
+    // Hide non-visible nodes (skip folder compound nodes initially)
     state.cy.nodes().forEach(node => {
-        if (node.data('type') === 'folder') return; // Keep folder containers visible
+        if (node.data('type') === 'folder') return;
         if (!visibleNodeIds.has(node.id())) {
             node.style('display', 'none');
+        }
+    });
+
+    // Hide folder nodes that contain no visible children
+    state.cy.nodes('[type = "folder"]').forEach(folder => {
+        const visibleChildren = folder.children().filter(n => n.style('display') !== 'none');
+        if (visibleChildren.length === 0) {
+            folder.style('display', 'none');
         }
     });
 
