@@ -467,6 +467,11 @@ function setupEventHandlers() {
             hideFolderDetails();
             highlightNode(nodeId);
             await showFileDetails(nodeId);
+
+            // Re-apply 'selected' filter when clicking a new node
+            if (state.currentFilter === 'selected') {
+                applyFilter();
+            }
         }
     });
 
@@ -597,9 +602,25 @@ function setupEventHandlers() {
                 deleteBtn.disabled = true;
                 deleteText.textContent = 'Deleting...';
                 await api.deleteFile(path);
+
+                // Immediately remove node from graph (don't wait for watcher)
+                const cyNode = state.cy.getElementById(path);
+                if (cyNode.length) {
+                    cyNode.connectedEdges().remove();
+                    cyNode.remove();
+                }
+                // Also remove from local state
+                state.graph.nodes = state.graph.nodes.filter(n => n.id !== path);
+                state.graph.edges = state.graph.edges.filter(e => e.source !== path && e.target !== path);
+                state.fullGraph.nodes = state.fullGraph.nodes.filter(n => n.id !== path);
+                state.fullGraph.edges = state.fullGraph.edges.filter(e => e.source !== path && e.target !== path);
+                state.importantNodes.delete(path);
+                state.hiddenNodes.delete(path);
+                state.searchResults.delete(path);
+                updateStats();
+
                 hideFileDetails();
                 clearHighlight();
-                // Graph refresh is automatic via WebSocket
             } catch (error) {
                 console.error('Delete failed:', error);
                 deleteText.textContent = 'Error!';
@@ -745,8 +766,9 @@ async function applyFilter() {
         return;
     }
 
-    // Hide non-visible nodes
+    // Hide non-visible nodes (skip folder compound nodes)
     state.cy.nodes().forEach(node => {
+        if (node.data('type') === 'folder') return; // Keep folder containers visible
         if (!visibleNodeIds.has(node.id())) {
             node.style('display', 'none');
         }
