@@ -252,6 +252,28 @@ const cytoscapeStyle = [
         }
     },
     {
+        selector: 'edge.outgoing-edge',
+        style: {
+            'line-color': '#22c55e',
+            'target-arrow-color': '#22c55e',
+            'width': 2.5,
+            'z-index': 100,
+            'line-dash-pattern': [8, 4],
+            'line-dash-offset': 0
+        }
+    },
+    {
+        selector: 'edge.incoming-edge',
+        style: {
+            'line-color': '#ef4444',
+            'target-arrow-color': '#ef4444',
+            'width': 2.5,
+            'z-index': 100,
+            'line-dash-pattern': [8, 4],
+            'line-dash-offset': 0
+        }
+    },
+    {
         selector: 'node.connected',
         style: {
             'border-color': '#818cf8',
@@ -705,6 +727,17 @@ async function applyFilter() {
         visibleNodeIds = new Set(state.importantNodes);
     } else if (state.currentFilter === 'search') {
         visibleNodeIds = new Set(state.searchResults);
+    } else if (state.currentFilter === 'selected') {
+        if (state.selectedNode) {
+            const node = state.cy.getElementById(state.selectedNode);
+            if (node.length) {
+                visibleNodeIds.add(state.selectedNode);
+                // Add all descendants (transitive successors)
+                node.successors('node').forEach(n => visibleNodeIds.add(n.id()));
+                // Add direct parents (incomers)
+                node.incomers('node').forEach(n => visibleNodeIds.add(n.id()));
+            }
+        }
     }
 
     if (visibleNodeIds.size === 0) {
@@ -1283,7 +1316,7 @@ async function toggleFolderHidden() {
 // ============================================
 
 function highlightNode(nodeId) {
-    state.cy.elements().removeClass('highlighted connected dimmed');
+    state.cy.elements().removeClass('highlighted connected dimmed outgoing-edge incoming-edge');
 
     const node = state.cy.getElementById(nodeId);
 
@@ -1301,13 +1334,13 @@ function highlightNode(nodeId) {
 
     node.removeClass('dimmed').addClass('highlighted');
 
-    // Highlight all descendants (full transitive closure)
+    // Highlight all descendants with green outgoing edges
     allDescendantNodes.removeClass('dimmed').addClass('connected');
-    allDescendantEdges.removeClass('dimmed').addClass('highlighted');
+    allDescendantEdges.removeClass('dimmed').addClass('outgoing-edge');
 
-    // Highlight direct incomers
+    // Highlight direct incomers with red incoming edges
     incomingNodes.removeClass('dimmed').addClass('connected');
-    incomingEdges.removeClass('dimmed').addClass('highlighted');
+    incomingEdges.removeClass('dimmed').addClass('incoming-edge');
 
     state.cy.animate({
         center: { eles: node },
@@ -1433,24 +1466,21 @@ function hideFileDetails() {
 // Search
 // ============================================
 
-function parseSearchQuery(query) {
-    const exactMatches = [];
-    let semanticPart = query;
-
-    const quoteRegex = /"([^"]+)"/g;
-    let match;
-    while ((match = quoteRegex.exec(query)) !== null) {
-        exactMatches.push(match[1].toLowerCase());
-    }
-
-    semanticPart = query.replace(quoteRegex, '').trim();
-
-    return {
-        semantic: semanticPart,
-        exact: exactMatches,
-        hasExact: exactMatches.length > 0,
-        hasSemantic: semanticPart.length > 0
-    };
+/**
+ * Perform a filename search (triggered by @ prefix).
+ * Smart matching: splits query into tokens and matches all of them against file paths/labels.
+ */
+function performFilenameSearch(query) {
+    const tokens = query.toLowerCase().split(/[\s\/\-_]+/).filter(t => t.length > 0);
+    return state.graph.nodes.filter(node => {
+        const id = node.id.toLowerCase();
+        const label = node.label.toLowerCase();
+        return tokens.every(token => id.includes(token) || label.includes(token));
+    }).map(node => ({
+        path: node.id,
+        label: node.label,
+        score: 1.0
+    }));
 }
 
 async function performSearch() {
@@ -1458,39 +1488,20 @@ async function performSearch() {
     if (!rawQuery) return;
 
     const resultsContainer = document.getElementById('search-results');
-    const parsed = parseSearchQuery(rawQuery);
 
     try {
         clearSearchHighlight();
 
         let results = [];
-        const graph = state.graph;
 
-        let candidateNodes = graph.nodes;
-
-        if (parsed.hasExact) {
-            candidateNodes = graph.nodes.filter(node => {
-                const nodeId = node.id.toLowerCase();
-                const nodeLabel = node.label.toLowerCase();
-                return parsed.exact.some(exact =>
-                    nodeId.includes(exact) || nodeLabel.includes(exact)
-                );
-            });
-        }
-
-        if (parsed.hasSemantic && candidateNodes.length > 0) {
-            const data = await api.search(parsed.semantic, true);
-            if (data.results) {
-                const candidateIds = new Set(candidateNodes.map(n => n.id));
-                results = data.results.filter(r => candidateIds.has(r.path));
+        if (rawQuery.startsWith('@')) {
+            // @ prefix: filename search (no semantic)
+            const filenameQuery = rawQuery.slice(1).trim();
+            if (filenameQuery.length > 0) {
+                results = performFilenameSearch(filenameQuery);
             }
-        } else if (parsed.hasExact) {
-            results = candidateNodes.map(node => ({
-                path: node.id,
-                label: node.label,
-                score: 1.0
-            }));
         } else {
+            // Default: semantic search
             const data = await api.search(rawQuery, true);
             results = data.results || [];
         }

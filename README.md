@@ -39,11 +39,13 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 
 - **Graphe interactif** des fichiers et leurs dépendances (imports)
 - **Mise à jour temps réel** : le graphe se rafraîchit automatiquement lors de modifications de fichiers
-- **Recherche** textuelle ou sémantique pour trouver des fichiers
+- **Recherche** sémantique ou par nom de fichier (préfixe `@`) 
 - **Focus** sur un noeud pour voir **toute sa descendance** (successeurs transitifs) et ses importeurs directs
+- **Flèches directionnelles** : vert pour les dépendances sortantes, rouge pour les entrantes
 - **Panneau latéral** avec fonctions, classes et docstrings
 - **Marquage "Important"** pour mettre en valeur certains fichiers
 - **Groupement par dossier** : Toggle permettant de regrouper visuellement les fichiers par répertoire
+- **Filtre "Selected"** : Isole le noeud sélectionné avec sa descendance et ses parents directs
 - **Navigation hiérarchique** : Boutons ▲/▼ pour monter/descendre dans l'arborescence des dossiers, avec indicateur de profondeur
 - **Hide/Unhide de dossiers** : Cliquez sur un dossier pour cacher/afficher tous ses fichiers d'un coup
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**

@@ -592,6 +592,11 @@ body {
     border-color: var(--error);
 }
 
+.filter-btn[data-filter="selected"].active {
+    background: #818cf8;
+    border-color: #818cf8;
+}
+
 /* File Items */
 .details-content h3 {
     font-size: 13px;
@@ -958,9 +963,12 @@ body {
 }
 
 @keyframes pending-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
     }
+
     50% {
         box-shadow: 0 4px 30px rgba(239, 68, 68, 0.7);
     }
