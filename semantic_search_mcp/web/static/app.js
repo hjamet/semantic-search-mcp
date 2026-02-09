@@ -23,7 +23,8 @@ const state = {
     folderDepth: null, // Current folder grouping depth (null = max depth)
     maxFolderDepth: 1, // Max depth of folder hierarchy
     wasInHiddenView: false, // Track if we came from hidden view
-    websocket: null // WebSocket connection for real-time updates
+    websocket: null, // WebSocket connection for real-time updates
+    pendingChanges: 0 // Number of pending graph changes from WebSocket
 };
 
 // ============================================
@@ -44,8 +45,9 @@ function connectWebSocket() {
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'graph_updated') {
-                console.log('[WebSocket] Graph updated, refreshing...');
-                await reloadMainGraph();
+                state.pendingChanges++;
+                console.log(`[WebSocket] Change detected (${state.pendingChanges} pending)`);
+                showPendingUpdate();
             }
         } catch (e) {
             console.warn('[WebSocket] Failed to parse message:', e);
@@ -60,6 +62,28 @@ function connectWebSocket() {
     state.websocket.onerror = (error) => {
         console.warn('[WebSocket] Error:', error);
     };
+}
+
+/**
+ * Show the pending update notification button with current change count.
+ */
+function showPendingUpdate() {
+    const btn = document.getElementById('pending-update-btn');
+    const countEl = document.getElementById('pending-count');
+    if (btn && countEl) {
+        countEl.textContent = state.pendingChanges;
+        btn.classList.remove('hidden');
+    }
+}
+
+/**
+ * Apply pending changes: reload the graph and hide the notification.
+ */
+async function applyPendingUpdate() {
+    const btn = document.getElementById('pending-update-btn');
+    state.pendingChanges = 0;
+    if (btn) btn.classList.add('hidden');
+    await reloadMainGraph();
 }
 
 // ============================================
@@ -575,6 +599,9 @@ function setupEventHandlers() {
             }, 3000); // 3 seconds to click again
         }
     });
+
+    // Pending update button (manual graph refresh)
+    document.getElementById('pending-update-btn').addEventListener('click', applyPendingUpdate);
 
     // Sidebar resize
     setupSidebarResize();

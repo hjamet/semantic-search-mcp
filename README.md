@@ -48,7 +48,7 @@ Lorsque vous lancez `semcp`, une interface web s'ouvre automatiquement sur `http
 - **Hide/Unhide de dossiers** : Cliquez sur un dossier pour cacher/afficher tous ses fichiers d'un coup
 - **Suppression de fichier** : Action directe dans la sidebar avec confirmation par **double-click**
 - **Détection de code mort** : Affichage en rouge des fonctions/classes non utilisées (dead code)
-- **Stabilité de la vue** : Les mises à jour temps réel préservent la position et le zoom courants
+- **Notification de changements** : Bouton rouge animé indiquant le nombre de modifications détectées, mise à jour manuelle du graphe au clic
 - **Analyse d'import robuste** : Support complet des imports Python (relatifs, absolus, conditionnels) avec détection automatique des source roots (`src/`, `lib/`, etc.) pour un graphe sans bruit.
 
 

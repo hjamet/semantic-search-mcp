@@ -918,6 +918,54 @@ body {
     transform: scale(0.95);
 }
 
+/* Pending Update Button */
+.pending-update-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: rgba(239, 68, 68, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    border-radius: 12px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    z-index: 20;
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+    animation: pending-pulse 2s ease-in-out infinite;
+    transition: all var(--transition-fast);
+}
+
+.pending-update-btn:hover {
+    background: rgba(239, 68, 68, 1);
+    transform: scale(1.05);
+    box-shadow: 0 6px 28px rgba(239, 68, 68, 0.5);
+}
+
+.pending-update-btn:active {
+    transform: scale(0.95);
+}
+
+.pending-update-btn.hidden {
+    display: none;
+}
+
+@keyframes pending-pulse {
+    0%, 100% {
+        box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        box-shadow: 0 4px 30px rgba(239, 68, 68, 0.7);
+    }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
