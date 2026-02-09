@@ -33,7 +33,26 @@ class DependencyAnalyzer:
             ".semcp", ".semsearch", "dist", "build", ".next"
         ])
         self._file_cache: Dict[str, List[str]] = {}  # path -> imports
+        self._source_roots = self._discover_source_roots()
         
+    def _discover_source_roots(self) -> List[Path]:
+        """Discover all directories that serve as Python source roots.
+        
+        A source root is any direct subdirectory of repo_path that contains
+        at least one Python package (a subfolder with __init__.py).
+        The repo_path itself is always included as the primary root.
+        """
+        roots = [self.repo_path]
+        for entry in self.repo_path.iterdir():
+            if not entry.is_dir() or entry.name in self.ignored_dirs or entry.name.startswith('.'):
+                continue
+            # Check if this directory contains at least one Python package
+            for sub in entry.iterdir():
+                if sub.is_dir() and (sub / '__init__.py').exists():
+                    roots.append(entry)
+                    break
+        return roots
+
     def _get_all_files(self) -> List[Path]:
         """Get all supported source files in the repository."""
         files = []
@@ -214,10 +233,9 @@ class DependencyAnalyzer:
 
         # Skip external modules if they don't look like paths
         if not import_name.startswith('.') and '/' not in import_name:
-            # Check if it starts with a top-level package existing in repo
+            # Check if it starts with a top-level package existing in any source root
             parts = import_name.split('.')
-            potential_path = self.repo_path / parts[0]
-            if not potential_path.exists():
+            if not any((root / parts[0]).exists() for root in self._source_roots):
                 return None  # Likely external dependency
         
         # For relative imports in JS/TS (also handles strings from py but usually relative)
@@ -235,12 +253,12 @@ class DependencyAnalyzer:
                         continue
         
         # For Python-style absolute imports (dots to slashes)
-        parts = import_name.replace('.', '/')
-        # Try finding the file or the package
-        for ext in ['.py', '/__init__.py']:
-            candidate = self.repo_path / (parts + ext)
-            if candidate.exists() and candidate.is_file():
-                return str(candidate.relative_to(self.repo_path))
+        parts_path = import_name.replace('.', '/')
+        for root in self._source_roots:
+            for ext in ['.py', '/__init__.py']:
+                candidate = root / (parts_path + ext)
+                if candidate.exists() and candidate.is_file():
+                    return str(candidate.relative_to(self.repo_path))
         
         # Try partial resolution for imports like 'from package.subpkg import something'
         # when 'something' is actually a module 'something.py'
@@ -249,9 +267,10 @@ class DependencyAnalyzer:
             for i in range(len(parts)-1, 0, -1):
                 prefix = '/'.join(parts[:i])
                 suffix = parts[i]
-                candidate = self.repo_path / prefix / f"{suffix}.py"
-                if candidate.exists() and candidate.is_file():
-                    return str(candidate.relative_to(self.repo_path))
+                for root in self._source_roots:
+                    candidate = root / prefix / f"{suffix}.py"
+                    if candidate.exists() and candidate.is_file():
+                        return str(candidate.relative_to(self.repo_path))
 
         return None
     

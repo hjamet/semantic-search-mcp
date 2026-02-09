@@ -14,11 +14,14 @@ const state = {
     fullGraph: { nodes: [], edges: [] }, // Full graph including hidden for path finding
     hiddenGraph: { nodes: [], edges: [] },
     selectedNode: null,
+    selectedFolder: null, // Currently selected folder directory path
     importantNodes: new Set(),
     hiddenNodes: new Set(),
     searchResults: new Set(),
     currentFilter: 'all', // 'all', 'important', 'search', 'hidden'
     showFolders: false, // Folder grouping toggle
+    folderDepth: null, // Current folder grouping depth (null = max depth)
+    maxFolderDepth: 1, // Max depth of folder hierarchy
     wasInHiddenView: false, // Track if we came from hidden view
     websocket: null // WebSocket connection for real-time updates
 };
@@ -110,6 +113,16 @@ const api = {
             body: JSON.stringify({ path, hidden })
         });
         if (!response.ok) throw new Error('Failed to update hidden status');
+        return response.json();
+    },
+
+    async setFolderHidden(directory, hidden) {
+        const response = await fetch('/api/hidden/folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ directory, hidden })
+        });
+        if (!response.ok) throw new Error('Failed to update folder hidden status');
         return response.json();
     },
 
@@ -394,12 +407,21 @@ async function initGraph() {
 // ============================================
 
 function setupEventHandlers() {
-    // Node click - show details
+    // Node click - show details (file or folder)
     state.cy.on('tap', 'node', async function (event) {
         const node = event.target;
         const nodeId = node.id();
-        highlightNode(nodeId);
-        await showFileDetails(nodeId);
+        const nodeType = node.data('type');
+
+        if (nodeType === 'folder') {
+            // Folder click: show folder details panel
+            showFolderDetails(node);
+        } else {
+            // File click: show file details panel
+            hideFolderDetails();
+            highlightNode(nodeId);
+            await showFileDetails(nodeId);
+        }
     });
 
     // Background click - clear selection
@@ -482,8 +504,36 @@ function setupEventHandlers() {
     const folderToggle = document.getElementById('folder-toggle');
     folderToggle.addEventListener('change', (e) => {
         state.showFolders = e.target.checked;
+        const depthControls = document.getElementById('depth-controls');
+        if (state.showFolders) {
+            depthControls.classList.remove('hidden');
+            computeMaxFolderDepth();
+            if (state.folderDepth === null) {
+                state.folderDepth = state.maxFolderDepth;
+            }
+            updateDepthIndicator();
+        } else {
+            depthControls.classList.add('hidden');
+        }
         applyFolderGrouping();
     });
+
+    // Depth controls
+    document.getElementById('depth-up-btn').addEventListener('click', () => {
+        decreaseDepth();
+    });
+    document.getElementById('depth-down-btn').addEventListener('click', () => {
+        increaseDepth();
+    });
+
+    // Close folder details panel
+    document.getElementById('close-folder-details').addEventListener('click', () => {
+        hideFolderDetails();
+        clearHighlight();
+    });
+
+    // Hide folder button
+    document.getElementById('hide-folder-btn').addEventListener('click', toggleFolderHidden);
 
     // Delete button - double-click to confirm
     const deleteBtn = document.getElementById('delete-file-btn');
@@ -948,23 +998,76 @@ async function reloadMainGraph() {
 // Folder Grouping Functions
 // ============================================
 
+/**
+ * Compute the maximum folder depth from current graph nodes.
+ * Each directory like "src/utils/helpers" has depth 3.
+ */
+function computeMaxFolderDepth() {
+    let maxDepth = 1;
+    state.graph.nodes.forEach(node => {
+        if (node.directory) {
+            const parts = node.directory.replace(/\/$/, '').split('/');
+            if (parts.length > maxDepth) {
+                maxDepth = parts.length;
+            }
+        }
+    });
+    state.maxFolderDepth = maxDepth;
+}
+
+function updateDepthIndicator() {
+    const indicator = document.getElementById('depth-indicator');
+    const upBtn = document.getElementById('depth-up-btn');
+    const downBtn = document.getElementById('depth-down-btn');
+    if (indicator) {
+        indicator.textContent = `${state.folderDepth}/${state.maxFolderDepth}`;
+    }
+    if (upBtn) {
+        upBtn.disabled = state.folderDepth <= 1;
+    }
+    if (downBtn) {
+        downBtn.disabled = state.folderDepth >= state.maxFolderDepth;
+    }
+}
+
+function decreaseDepth() {
+    if (state.folderDepth > 1) {
+        state.folderDepth--;
+        updateDepthIndicator();
+        applyFolderGrouping();
+    }
+}
+
+function increaseDepth() {
+    if (state.folderDepth < state.maxFolderDepth) {
+        state.folderDepth++;
+        updateDepthIndicator();
+        applyFolderGrouping();
+    }
+}
+
 function generateFolderHierarchy(nodes) {
     /**
-     * Generate only the lowest level folder nodes (immediate parents of files).
-     * This avoids nested complex boxes and lightens the graph.
+     * Generate folder nodes at the current depth level.
+     * Files are grouped by their directory path truncated to `state.folderDepth` segments.
+     * 
+     * Example: depth=1 -> "src/", depth=2 -> "src/utils/"
      * 
      * Returns: { folders: Map<id, {node, parent}>, fileParents: Map<fileId, parentFolderId> }
      */
-    const folders = new Map(); // folderId -> { node definition, parent folderId }
-    const fileParents = new Map(); // fileNodeId -> immediate parent folder id
+    const folders = new Map();
+    const fileParents = new Map();
+    const depth = state.folderDepth || state.maxFolderDepth;
 
     nodes.forEach(node => {
         const dir = node.data('directory');
         if (!dir) return;
 
-        // Use the full directory path as the folder ID and label
-        // Since we are no longer nesting, the full path is clearer as a label
-        const folderId = `folder:${dir}`;
+        // Truncate directory to the configured depth
+        const parts = dir.replace(/\/$/, '').split('/');
+        const truncatedParts = parts.slice(0, depth);
+        const truncatedDir = truncatedParts.join('/');
+        const folderId = `folder:${truncatedDir}`;
 
         if (!folders.has(folderId)) {
             folders.set(folderId, {
@@ -972,16 +1075,15 @@ function generateFolderHierarchy(nodes) {
                     group: 'nodes',
                     data: {
                         id: folderId,
-                        label: dir,
+                        label: truncatedDir,
                         type: 'folder',
-                        fullPath: dir
+                        fullPath: truncatedDir
                     }
                 },
-                parent: null // No nesting anymore
+                parent: null
             });
         }
 
-        // Parent is always the immediate folder
         fileParents.set(node.id(), folderId);
     });
 
@@ -992,36 +1094,32 @@ function applyFolderGrouping() {
     if (!state.cy) return;
 
     state.cy.batch(() => {
+        // Always clean up existing folder grouping first
+        state.cy.nodes('[type != "folder"]').move({ parent: null });
+        state.cy.nodes('[type = "folder"]').remove();
+
         if (state.showFolders) {
-            // 1. Generate folder hierarchy
+            // Generate folder hierarchy at current depth
             const currentNodes = state.cy.nodes('[type != "folder"]');
             const { folders, fileParents } = generateFolderHierarchy(currentNodes);
 
-            // 2. Add folder nodes
+            // Add folder nodes
             folders.forEach(({ node }, folderId) => {
-                if (state.cy.getElementById(folderId).empty()) {
-                    state.cy.add(node);
-                }
+                state.cy.add(node);
             });
 
-            // 3. Assign files to their immediate parent folders
+            // Assign files to their parent folders
             currentNodes.forEach(node => {
                 const parentFolderId = fileParents.get(node.id());
                 if (parentFolderId) {
                     node.move({ parent: parentFolderId });
                 }
             });
-        } else {
-            // 1. Remove parents from all non-folder nodes
-            state.cy.nodes('[type != "folder"]').move({ parent: null });
-            // 2. Remove all folder nodes
-            state.cy.nodes('[type = "folder"]').remove();
         }
     });
 
-    // 3. Layout handling
+    // Layout handling
     if (state.showFolders) {
-        // Run dagre layout for folder grouping
         const layout = state.cy.layout({
             name: 'dagre',
             rankDir: 'TB',
@@ -1046,10 +1144,8 @@ function applyFolderGrouping() {
                     });
                 }
             });
-            // Fit view after animation
             setTimeout(() => state.cy.fit(undefined, 50), 450);
         } else {
-            // Fallback: run dagre layout if no original positions
             const layout = state.cy.layout({
                 name: 'dagre',
                 rankDir: 'TB',
@@ -1062,6 +1158,87 @@ function applyFolderGrouping() {
             });
             layout.run();
         }
+    }
+}
+
+// ============================================
+// Folder Details & Hide/Unhide
+// ============================================
+
+function showFolderDetails(folderNode) {
+    const folderPath = folderNode.data('fullPath');
+    state.selectedFolder = folderPath;
+
+    // Hide file details if open
+    hideFileDetails();
+
+    const panel = document.getElementById('folder-details');
+    const folderName = document.getElementById('folder-name');
+    const folderPathEl = document.getElementById('folder-path');
+    const fileCountEl = document.getElementById('folder-file-count');
+    const hiddenCountEl = document.getElementById('folder-hidden-count');
+    const hideFolderBtn = document.getElementById('hide-folder-btn');
+    const hideFolderText = document.getElementById('hide-folder-text');
+
+    folderName.textContent = folderPath.split('/').pop() + '/';
+    folderPathEl.textContent = folderPath;
+
+    // Count files in this folder (including hidden)
+    const allFilesInFolder = state.fullGraph.nodes.filter(
+        n => (n.directory || '').startsWith(folderPath)
+    );
+    const hiddenInFolder = allFilesInFolder.filter(n => state.hiddenNodes.has(n.id));
+
+    fileCountEl.textContent = allFilesInFolder.length;
+    hiddenCountEl.textContent = hiddenInFolder.length;
+
+    // Determine if all visible files in folder are hidden
+    const visibleInFolder = allFilesInFolder.filter(n => !state.hiddenNodes.has(n.id));
+    const allHidden = visibleInFolder.length === 0 && allFilesInFolder.length > 0;
+
+    hideFolderBtn.classList.toggle('active', allHidden);
+    hideFolderText.textContent = allHidden ? 'Unhide Folder' : 'Hide Folder';
+
+    panel.classList.remove('hidden');
+}
+
+function hideFolderDetails() {
+    document.getElementById('folder-details').classList.add('hidden');
+    state.selectedFolder = null;
+}
+
+async function toggleFolderHidden() {
+    if (!state.selectedFolder) return;
+
+    const folderPath = state.selectedFolder;
+
+    // Determine current state: if there are visible files, we hide; otherwise unhide
+    const allFilesInFolder = state.fullGraph.nodes.filter(
+        n => (n.directory || '').startsWith(folderPath)
+    );
+    const visibleInFolder = allFilesInFolder.filter(n => !state.hiddenNodes.has(n.id));
+    const shouldHide = visibleInFolder.length > 0;
+
+    try {
+        const result = await api.setFolderHidden(folderPath, shouldHide);
+
+        // Update local hidden state
+        state.hiddenNodes.clear();
+        result.nodes.forEach(id => state.hiddenNodes.add(id));
+
+        updateHiddenCount();
+        hideFolderDetails();
+        clearHighlight();
+
+        if (shouldHide && state.currentFilter !== 'hidden') {
+            await reloadMainGraph();
+        } else if (!shouldHide && state.currentFilter === 'hidden') {
+            await loadHiddenNodes();
+        } else {
+            await reloadMainGraph();
+        }
+    } catch (error) {
+        console.error('Failed to toggle folder hidden:', error);
     }
 }
 
