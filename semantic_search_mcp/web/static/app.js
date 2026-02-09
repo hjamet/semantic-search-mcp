@@ -859,11 +859,19 @@ async function loadHiddenNodes() {
 
 async function reloadMainGraph() {
     try {
+        // 0. Strip folder grouping before diffing to avoid removing children with parents
+        if (state.showFolders) {
+            state.cy.batch(() => {
+                state.cy.nodes('[type != "folder"]').move({ parent: null });
+                state.cy.nodes('[type = "folder"]').remove();
+            });
+        }
+
         // 1. Save current viewport state
         const currentZoom = state.cy.zoom();
         const currentPan = { ...state.cy.pan() };
 
-        // 2. Save current node positions
+        // 2. Save current node positions (folder nodes already removed)
         const currentPositions = {};
         state.cy.nodes().forEach(node => {
             currentPositions[node.id()] = { ...node.position() };
