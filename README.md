@@ -117,6 +117,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 |----------|-------------|
 | `semcp` | Configure le dossier courant et lance la visualisation web |
 | `semcp --no-web` | Mode sans interface web |
+| `semcp --force-cpu` | Force l'utilisation du CPU (désactive la détection GPU) |
 | `semantic_search_mcp` | Lance le serveur MCP (interne) |
 
 ## Scripts exécutables secondaires & Utilitaires
@@ -145,3 +146,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Remplacement Qdrant par SimpleVectorStore (Zero Lock)
 - [x] Fix stabilité vue (préservation viewport lors des updates WebSocket)
 - [x] Highlight descendance complète (successeurs transitifs + importeurs directs)
+- [x] [Garantie Absolue d'Exécution GPU (Strict Fallback Control)](docs/tasks/strict_gpu_execution.md)

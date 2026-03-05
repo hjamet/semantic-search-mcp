@@ -165,6 +165,8 @@ async def handle_call_tool(
     
     try:
         engine = SemanticEngine(repo_path=repo_path)
+        import sys
+        sys.stderr.write(f"DEBUG: SemanticEngine initialized with {engine.active_provider}\n")
     except ValueError as e:
         return [types.TextContent(type="text", text=f"Error: {str(e)}. Please run 'semcp' first.")]
     

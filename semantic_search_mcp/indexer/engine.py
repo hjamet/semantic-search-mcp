@@ -8,13 +8,14 @@ from pathlib import Path
 from .simple_store import SimpleVectorStore
 
 class SemanticEngine:
-    def __init__(self, repo_path: Optional[str] = None):
+    def __init__(self, repo_path: Optional[str] = None, force_cpu: bool = False):
         """
         Initialize the SemanticEngine.
         
         Args:
             repo_path: The root directory of the repository to index. 
                       If None, tries to read SEMANTIC_SEARCH_ROOT env var.
+            force_cpu: If True, bypass GPU detection and use CPU only.
         """
         if repo_path:
             self.repo_path = Path(repo_path).resolve()
@@ -27,12 +28,33 @@ class SemanticEngine:
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
         # Detection GPU — test real CUDA device availability
-        self.device = "cuda" if self._has_cuda() else "cpu"
+        use_cuda = False if force_cpu else self._has_cuda()
+        self.device = "cuda" if use_cuda else "cpu"
         
         # Model selection: BGE-small-en-v1.5 is fast and efficient
-        # Use CUDA if available, with CPU fallback
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self.device == "cuda" else ["CPUExecutionProvider"]
-        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+        # Strict mode: No silent fallback. If cuda is detected, we ONLY try CUDA.
+        if self.device == "cuda":
+            providers = ["CUDAExecutionProvider"]
+            try:
+                self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+                self.active_provider = "CUDAExecutionProvider"
+            except Exception as e:
+                # Option B: Fallback to CPU with a LOUD warning
+                import sys
+                sys.stderr.write("\n" + "!" * 80 + "\n")
+                sys.stderr.write(f"CRITICAL GPU ERROR: CUDA was detected but initialization failed.\n")
+                sys.stderr.write(f"Error: {e}\n")
+                sys.stderr.write(f"FALLING BACK TO CPU MODE (Performance will be degraded).\n")
+                sys.stderr.write("!" * 80 + "\n\n")
+                
+                providers = ["CPUExecutionProvider"]
+                self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+                self.active_provider = "CPUExecutionProvider"
+                self.device = "cpu"
+        else:
+            providers = ["CPUExecutionProvider"]
+            self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+            self.active_provider = "CPUExecutionProvider"
         
         # Metadata storage
         self.metadata_path = self.storage_path / "index_metadata.json"
