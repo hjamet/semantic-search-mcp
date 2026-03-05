@@ -28,7 +28,7 @@ fi
 # 3. Create/Update Venv
 echo "🛠️  Setting up environment in $VENV_DIR..."
 mkdir -p "$INSTALL_DIR"
-uv venv "$VENV_DIR" --python 3.10 --seed
+uv venv "$VENV_DIR" --python 3.11 --seed
 
 echo "📦 Installing specific dependencies..."
 # Force install dependencies in the venv
@@ -42,6 +42,27 @@ echo "🎮 Setting up GPU support (CUDA 12)..."
 "$VENV_DIR/bin/pip" install onnxruntime-gpu --force-reinstall --quiet \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
+echo "🧠 Initializing dedicated model cache..."
+export FASTEMBED_CACHE_PATH="$INSTALL_DIR/cache"
+mkdir -p "$FASTEMBED_CACHE_PATH"
+# Clean any past incomplete downloads just in case
+find "$FASTEMBED_CACHE_PATH" -name "*.incomplete" -type f -delete 2>/dev/null || true
+
+# Pre-download the model to avoid first-run delays and handle corruptions
+if ! "$VENV_DIR/bin/python" -c "
+import sys
+from fastembed import TextEmbedding
+try:
+    print('Downloading BAAI/bge-small-en-v1.5...')
+    TextEmbedding(model_name='BAAI/bge-small-en-v1.5')
+except Exception as e:
+    print(f'Download failed: {e}')
+    sys.exit(1)
+"; then
+    echo "⚠️ Model download incomplete. Cleaning up corrupted cache..."
+    rm -rf "$FASTEMBED_CACHE_PATH/models--qdrant--bge-small-en-v1.5-onnx-q"
+fi
+
 # 4. Create Wrapper Scripts (not symlinks, to ignore active venvs)
 echo "🔗 Creating wrapper scripts in $BIN_DIR..."
 mkdir -p "$BIN_DIR"
@@ -54,6 +75,7 @@ rm -f "$BIN_DIR/semantic_search_mcp"
 cat > "$BIN_DIR/semcp" << 'WRAPPER'
 #!/bin/bash
 # Wrapper to ensure we always use the correct Python environment
+export FASTEMBED_CACHE_PATH="$HOME/.semcp/cache"
 exec "$HOME/.semcp/.venv/bin/python" -m semantic_search_mcp.cli "$@"
 WRAPPER
 chmod +x "$BIN_DIR/semcp"
@@ -62,6 +84,7 @@ chmod +x "$BIN_DIR/semcp"
 cat > "$BIN_DIR/semantic_search_mcp" << 'WRAPPER'
 #!/bin/bash
 # Wrapper to ensure we always use the correct Python environment
+export FASTEMBED_CACHE_PATH="$HOME/.semcp/cache"
 exec "$HOME/.semcp/.venv/bin/python" -m semantic_search_mcp.server "$@"
 WRAPPER
 chmod +x "$BIN_DIR/semantic_search_mcp"

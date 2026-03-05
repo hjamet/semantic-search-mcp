@@ -2,8 +2,13 @@ import typer
 import os
 import json
 from pathlib import Path
+import warnings
 from rich.console import Console
 from rich.progress import Progress
+
+# Masquer les avertissements de fallback d'ONNX Runtime (fastembed)
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="fastembed")
+
 from semantic_search_mcp.indexer.engine import SemanticEngine
 from semantic_search_mcp.indexer.watcher import start_watcher
 
@@ -120,9 +125,9 @@ def main(
     if not no_web:
         try:
             from semantic_search_mcp.web.api import start_server
-            console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{WEB_PORT}]http://localhost:{WEB_PORT}[/link]")
+            actual_port = start_server(cwd, engine=engine, port=WEB_PORT)
+            console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{actual_port}]http://localhost:{actual_port}[/link]")
             console.print("[dim]Press Ctrl+C to stop.[/]\n")
-            start_server(cwd, engine=engine, port=WEB_PORT)
         except ImportError as e:
             console.print(f"[yellow]⚠ Web server not available: {e}[/]")
         except Exception as e:

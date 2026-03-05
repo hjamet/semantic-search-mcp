@@ -26,10 +26,8 @@ class SemanticEngine:
         self.storage_path = self.repo_path / ".semcp"
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
-        # Detection GPU
+        # Detection GPU — test real CUDA device availability
         self.device = "cuda" if self._has_cuda() else "cpu"
-        
-        print(f"DEBUG: Initializing SemanticEngine on {self.device}")
         
         # Model selection: BGE-small-en-v1.5 is fast and efficient
         # Use CUDA if available, with CPU fallback
@@ -63,13 +61,45 @@ class SemanticEngine:
 
     def _has_cuda(self) -> bool:
         """
-        Detect CUDA availability for onnxruntime.
+        Detect real CUDA device availability by actually probing the GPU.
+        Uses subprocess to avoid polluting stderr with C++ onnxruntime errors.
         """
         try:
-            import onnxruntime as ort
-            available_providers = ort.get_available_providers()
-            return "CUDAExecutionProvider" in available_providers
-        except ImportError:
+            import subprocess, sys
+            # Run a quick CUDA probe in a subprocess so any C++ stderr stays contained
+            probe = subprocess.run(
+                [sys.executable, "-c", 
+                 "import onnxruntime as ort; "
+                 "s = ort.InferenceSession.__new__(ort.InferenceSession); "
+                 "provs = ort.get_available_providers(); "
+                 "exit(0 if 'CUDAExecutionProvider' in provs else 1)"
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10
+            )
+            if probe.returncode != 0:
+                return False
+            
+            # Verify actual device with a real CUDA call
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "import ctypes, sys; "
+                 "try:\n"
+                 "  cuda = ctypes.CDLL('libcuda.so.1')\n"
+                 "  count = ctypes.c_int(0)\n"
+                 "  r = cuda.cuInit(0)\n"
+                 "  if r != 0: sys.exit(1)\n"
+                 "  r = cuda.cuDeviceGetCount(ctypes.byref(count))\n"
+                 "  sys.exit(0 if r == 0 and count.value > 0 else 1)\n"
+                 "except: sys.exit(1)"
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5
+            )
+            return result.returncode == 0
+        except Exception:
             return False
 
     def chunk_text(self, text: str, file_path: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
