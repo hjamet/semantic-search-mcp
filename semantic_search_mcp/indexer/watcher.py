@@ -8,7 +8,7 @@ import sys
 class IndexingHandler(FileSystemEventHandler):
     def __init__(self, engine: SemanticEngine, ignored_dirs=None):
         self.engine = engine
-        self.ignored_dirs = ignored_dirs or [".git", "__pycache__", ".venv", ".semcp", ".semsearch"]
+        self.ignored_dirs = ignored_dirs or [".git", "__pycache__", ".venv", ".semcp", ".semsearch", ".dvc", "node_modules", ".tox"]
 
     def on_modified(self, event):
         if not event.is_directory:

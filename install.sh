@@ -92,7 +92,7 @@ chmod +x "$BIN_DIR/semantic_search_mcp"
 # 5. Register in MCP Config
 echo "⚙️  Configuring MCP server..."
 MCP_CONFIG_PATH="$HOME/.gemini/antigravity/mcp_config.json"
-MCP_BIN_PATH="$VENV_DIR/bin/semantic_search_mcp"
+MCP_BIN_PATH="$BIN_DIR/semantic_search_mcp"
 
 if [ -f "$MCP_CONFIG_PATH" ]; then
     # Create temp python script to safely edit JSON
@@ -103,6 +103,7 @@ from pathlib import Path
 
 config_path = "$MCP_CONFIG_PATH"
 bin_path = "$MCP_BIN_PATH"
+cache_path = "$INSTALL_DIR/cache"
 
 try:
     with open(config_path, 'r') as f:
@@ -114,7 +115,9 @@ try:
     config["mcpServers"]["semantic-search"] = {
         "command": bin_path,
         "args": [],
-        "env": {}
+        "env": {
+            "FASTEMBED_CACHE_PATH": cache_path
+        }
     }
     
     with open(config_path, 'w') as f:

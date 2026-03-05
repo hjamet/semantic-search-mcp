@@ -85,7 +85,7 @@ def main(
     
     # 1. Scan initial
     current_files = {} # path -> mtime
-    ignored_dirs = [".git", "__pycache__", ".venv", ".semcp", ".semsearch", "node_modules"]
+    ignored_dirs = [".git", "__pycache__", ".venv", ".semcp", ".semsearch", "node_modules", ".dvc", ".tox"]
     
     for root, dirs, files in os.walk(cwd):
         # Modifier dirs in-place pour ignorer les dossiers
