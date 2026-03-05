@@ -7,6 +7,7 @@
 - ⚡ Mise à jour temps réel du graphe (WebSocket)
 - 🧠 **Analyseur intelligent** : Support du `TYPE_CHECKING`, imports relatifs complexes et fallbacks (try/except)
 - 🛡️ **Architecture "Zero-Lock"** : Nouveau moteur vectoriel fait maison (numpy/pickle) éliminant définitivement les erreurs de verrouillage.
+- 🛡️ **Flux stdout sécurisé** : Redirection des logs vers stderr pour une communication MCP 100% fiable.
 
 ## Installation
 
@@ -147,3 +148,4 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Fix stabilité vue (préservation viewport lors des updates WebSocket)
 - [x] Highlight descendance complète (successeurs transitifs + importeurs directs)
 - [x] [Garantie Absolue d'Exécution GPU (Strict Fallback Control)](docs/tasks/strict_gpu_execution.md)
+- [x] [Sécurisation du flux stdout pour MCP (Zero Pollution)](docs/tasks/secure_mcp_stdout.md)

@@ -1,6 +1,7 @@
 
 import os
 import pickle
+import sys
 import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -25,7 +26,7 @@ class SimpleVectorStore:
                     self.vectors = data.get("vectors")
                     self.payloads = data.get("payloads", [])
             except Exception as e:
-                print(f"ERROR: Failed to load vector store from {self.storage_path}: {e}")
+                sys.stderr.write(f"ERROR: Failed to load vector store from {self.storage_path}: {e}\n")
                 # Backup corrupt file if needed, for now just start fresh
                 self.vectors = None
                 self.payloads = []
@@ -45,7 +46,7 @@ class SimpleVectorStore:
                 }, f)
             temp_path.replace(self.storage_path)
         except Exception as e:
-            print(f"ERROR: Failed to save vector store: {e}")
+            sys.stderr.write(f"ERROR: Failed to save vector store: {e}\n")
             if temp_path.exists():
                 temp_path.unlink()
 

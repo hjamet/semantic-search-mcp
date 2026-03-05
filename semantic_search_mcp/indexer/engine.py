@@ -1,6 +1,7 @@
 
 import os
 import shutil
+import sys
 from typing import List, Dict, Any, Optional
 import numpy as np
 from fastembed import TextEmbedding
@@ -192,7 +193,7 @@ class SemanticEngine:
             self._save_metadata()
             
         except Exception as e:
-            print(f"Error indexing {file_path}: {e}")
+            sys.stderr.write(f"Error indexing {file_path}: {e}\n")
 
     def delete_file(self, file_path: str):
         relative_path = os.path.relpath(file_path, os.getcwd())

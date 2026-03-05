@@ -8,6 +8,7 @@ import json
 import threading
 import time
 from pathlib import Path
+import sys
 from typing import Optional, List, Set
 from contextlib import asynccontextmanager
 
@@ -560,7 +561,7 @@ def start_server(repo_path: str, engine=None, port: int = 8765) -> int:
                 access_log=False
             )
         except Exception as e:
-            print(f"Server error: {e}")
+            sys.stderr.write(f"Server error: {e}\n")
     
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
