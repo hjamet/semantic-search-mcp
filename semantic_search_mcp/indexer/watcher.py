@@ -4,28 +4,38 @@ from watchdog.events import FileSystemEventHandler
 from semantic_search_mcp.indexer.engine import SemanticEngine
 import os
 
+from semantic_search_mcp.constants import ALLOWED_EXTENSIONS, IGNORED_DIRS
+from pathlib import Path
+
 class IndexingHandler(FileSystemEventHandler):
     def __init__(self, engine: SemanticEngine, ignored_dirs=None):
         self.engine = engine
-        self.ignored_dirs = ignored_dirs or [".git", "__pycache__", ".venv", ".semcp", ".semsearch"]
+        self.ignored_dirs = ignored_dirs or IGNORED_DIRS
+
+    def _is_ignored(self, path: str) -> bool:
+        if any(ignored in path for ignored in self.ignored_dirs):
+            return True
+        if Path(path).suffix not in ALLOWED_EXTENSIONS:
+            return True
+        return False
 
     def on_modified(self, event):
         if not event.is_directory:
-            if any(ignored in event.src_path for ignored in self.ignored_dirs):
+            if self._is_ignored(event.src_path):
                 return
             print(f"[*] Change detected: {event.src_path}")
             self.engine.index_file(event.src_path)
 
     def on_created(self, event):
         if not event.is_directory:
-            if any(ignored in event.src_path for ignored in self.ignored_dirs):
+            if self._is_ignored(event.src_path):
                 return
             print(f"[+] New file: {event.src_path}")
             self.engine.index_file(event.src_path)
 
     def on_deleted(self, event):
         if not event.is_directory:
-            if any(ignored in event.src_path for ignored in self.ignored_dirs):
+            if self._is_ignored(event.src_path):
                 return
             print(f"[-] Deleted: {event.src_path}")
             self.engine.delete_file(event.src_path)

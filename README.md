@@ -144,4 +144,6 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] Outil MCP `semgraph` (recherche sémantique + graphe + détails)
 - [x] Remplacement Qdrant par SimpleVectorStore (Zero Lock)
 - [x] Fix stabilité vue (préservation viewport lors des updates WebSocket)
-- [x] Highlight descendance complète (successeurs transitifs + importeurs directs)
+- [x] [Highlight descendance complète](docs/tasks/highlight_descendants.md) (successeurs transitifs + importeurs directs)
+- [x] [Fix Bruit Watcher & Filtres](docs/tasks/fix_watcher_noise.md) (Centralisation constants.py + support .tex, .sh)
+- [x] [Fix Détection GPU & Install](docs/tasks/fix_gpu_detection.md) (Fallback nvidia-smi + clean install CUDA 12)

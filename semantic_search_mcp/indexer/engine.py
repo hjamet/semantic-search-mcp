@@ -63,14 +63,21 @@ class SemanticEngine:
 
     def _has_cuda(self) -> bool:
         """
-        Detect CUDA availability for onnxruntime.
+        Detect CUDA availability by checking onnxruntime providers.
+        nvidia-smi is irrelevant: a physical GPU doesn't mean onnxruntime-gpu is installed.
         """
         try:
             import onnxruntime as ort
-            available_providers = ort.get_available_providers()
-            return "CUDAExecutionProvider" in available_providers
+            available = ort.get_available_providers()
+            if "CUDAExecutionProvider" in available:
+                print("DEBUG: CUDAExecutionProvider available in onnxruntime")
+                return True
+            print(f"DEBUG: CUDAExecutionProvider not available. Providers: {available}")
         except ImportError:
-            return False
+            print("DEBUG: onnxruntime not installed")
+
+        print("DEBUG: Falling back to CPU")
+        return False
 
     def chunk_text(self, text: str, file_path: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
         """Simple chunking with line tracking."""

@@ -31,16 +31,11 @@ mkdir -p "$INSTALL_DIR"
 uv venv "$VENV_DIR" --python 3.10 --seed
 
 echo "📦 Installing specific dependencies..."
-# Force install dependencies in the venv
-uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" --force-reinstall
-
-# Fix CUDA support: onnxruntime-gpu ONLY (having both causes conflicts)
-# Note: fastembed requires onnxruntime, but onnxruntime-gpu satisfies this
-echo "🎮 Setting up GPU support (CUDA 12)..."
-"$VENV_DIR/bin/pip" uninstall onnxruntime -y 2>/dev/null || true
-# Install onnxruntime-gpu from CUDA 12 specific channel (requires cuDNN bundled)
-"$VENV_DIR/bin/pip" install onnxruntime-gpu --force-reinstall --quiet \
-    --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+# Install everything in one pass with CUDA 12 channel to avoid onnxruntime conflict
+uv pip install --python "$VENV_DIR/bin/python" "$SOURCE" \
+    --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ \
+    --force-reinstall
+echo "🎮 GPU support: onnxruntime-gpu installed via CUDA 12 channel"
 
 # 4. Create Wrapper Scripts (not symlinks, to ignore active venvs)
 echo "🔗 Creating wrapper scripts in $BIN_DIR..."

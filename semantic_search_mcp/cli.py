@@ -73,14 +73,15 @@ def main(
     engine = SemanticEngine(repo_path=cwd)
     
     # 1. Scan initial
+    from semantic_search_mcp.constants import ALLOWED_EXTENSIONS, IGNORED_DIRS
     current_files = {} # path -> mtime
-    ignored_dirs = [".git", "__pycache__", ".venv", ".semcp", ".semsearch", "node_modules"]
+    ignored_dirs = IGNORED_DIRS
     
     for root, dirs, files in os.walk(cwd):
         # Modifier dirs in-place pour ignorer les dossiers
         dirs[:] = [d for d in dirs if d not in ignored_dirs]
         for file in files:
-            if file.endswith((".py", ".md", ".js", ".ts", ".c", ".cpp", ".h", ".go", ".rs")):
+            if Path(file).suffix in ALLOWED_EXTENSIONS:
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, cwd)
                 current_files[rel_path] = os.path.getmtime(full_path)
