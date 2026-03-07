@@ -3,6 +3,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from semantic_search_mcp.indexer.engine import SemanticEngine
 import os
+import sys
 
 from semantic_search_mcp.constants import ALLOWED_EXTENSIONS, IGNORED_DIRS
 from pathlib import Path
@@ -12,32 +13,25 @@ class IndexingHandler(FileSystemEventHandler):
         self.engine = engine
         self.ignored_dirs = ignored_dirs or IGNORED_DIRS
 
-    def _is_ignored(self, path: str) -> bool:
-        if any(ignored in path for ignored in self.ignored_dirs):
-            return True
-        if Path(path).suffix not in ALLOWED_EXTENSIONS:
-            return True
-        return False
-
     def on_modified(self, event):
         if not event.is_directory:
             if self._is_ignored(event.src_path):
                 return
-            print(f"[*] Change detected: {event.src_path}")
+            sys.stderr.write(f"[*] Change detected: {event.src_path}\n")
             self.engine.index_file(event.src_path)
 
     def on_created(self, event):
         if not event.is_directory:
             if self._is_ignored(event.src_path):
                 return
-            print(f"[+] New file: {event.src_path}")
+            sys.stderr.write(f"[+] New file: {event.src_path}\n")
             self.engine.index_file(event.src_path)
 
     def on_deleted(self, event):
         if not event.is_directory:
             if self._is_ignored(event.src_path):
                 return
-            print(f"[-] Deleted: {event.src_path}")
+            sys.stderr.write(f"[-] Deleted: {event.src_path}\n")
             self.engine.delete_file(event.src_path)
 
 def start_watcher(engine: SemanticEngine, path: str):
@@ -45,7 +39,7 @@ def start_watcher(engine: SemanticEngine, path: str):
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
-    print(f"[*] Started watching {path}...")
+    sys.stderr.write(f"[*] Started watching {path}...\n")
     try:
         while True:
             time.sleep(1)

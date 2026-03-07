@@ -8,6 +8,7 @@ import json
 import threading
 import time
 from pathlib import Path
+import sys
 from typing import Optional, List, Set
 from contextlib import asynccontextmanager
 
@@ -522,30 +523,47 @@ def configure_server(repo_path: str, engine=None):
     _hidden_nodes_path = Path(repo_path) / ".semcp" / "hidden_nodes.json"
 
 
-def start_server(repo_path: str, engine=None, port: int = 8765):
+def start_server(repo_path: str, engine=None, port: int = 8765) -> int:
     """
     Start the web server in a background thread.
+    Automatically finds a free port starting from the requested port.
     
     Args:
         repo_path: Path to the repository.
         engine: Optional SemanticEngine for semantic search.
-        port: Port to run the server on.
+        port: Preferred port to run the server on.
     
     Returns:
-        The server thread.
+        The actual port used.
     """
+    import socket
+    
+    def find_free_port(start_port: int, max_attempts: int = 50) -> int:
+        for p in range(start_port, start_port + max_attempts):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(('127.0.0.1', p))
+                    return p
+                except OSError:
+                    continue
+        return start_port
+
+    actual_port = find_free_port(port)
     configure_server(repo_path, engine)
     
     def run_server():
-        uvicorn.run(
-            app,
-            host="127.0.0.1",
-            port=port,
-            log_level="warning",
-            access_log=False
-        )
+        try:
+            uvicorn.run(
+                app,
+                host="127.0.0.1",
+                port=actual_port,
+                log_level="error",
+                access_log=False
+            )
+        except Exception as e:
+            sys.stderr.write(f"Server error: {e}\n")
     
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
     
-    return thread
+    return actual_port

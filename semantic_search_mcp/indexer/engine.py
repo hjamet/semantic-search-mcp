@@ -1,6 +1,7 @@
 
 import os
 import shutil
+import sys
 from typing import List, Dict, Any, Optional
 import numpy as np
 from fastembed import TextEmbedding
@@ -8,13 +9,14 @@ from pathlib import Path
 from .simple_store import SimpleVectorStore
 
 class SemanticEngine:
-    def __init__(self, repo_path: Optional[str] = None):
+    def __init__(self, repo_path: Optional[str] = None, force_cpu: bool = False):
         """
         Initialize the SemanticEngine.
         
         Args:
             repo_path: The root directory of the repository to index. 
                       If None, tries to read SEMANTIC_SEARCH_ROOT env var.
+            force_cpu: If True, bypass GPU detection and use CPU only.
         """
         if repo_path:
             self.repo_path = Path(repo_path).resolve()
@@ -26,15 +28,34 @@ class SemanticEngine:
         self.storage_path = self.repo_path / ".semcp"
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
-        # Detection GPU
-        self.device = "cuda" if self._has_cuda() else "cpu"
-        
-        print(f"DEBUG: Initializing SemanticEngine on {self.device}")
+        # Detection GPU — test real CUDA device availability
+        use_cuda = False if force_cpu else self._has_cuda()
+        self.device = "cuda" if use_cuda else "cpu"
         
         # Model selection: BGE-small-en-v1.5 is fast and efficient
-        # Use CUDA if available, with CPU fallback
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if self.device == "cuda" else ["CPUExecutionProvider"]
-        self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+        # Strict mode: No silent fallback. If cuda is detected, we ONLY try CUDA.
+        if self.device == "cuda":
+            providers = ["CUDAExecutionProvider"]
+            try:
+                self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+                self.active_provider = "CUDAExecutionProvider"
+            except Exception as e:
+                # Option B: Fallback to CPU with a LOUD warning
+                import sys
+                sys.stderr.write("\n" + "!" * 80 + "\n")
+                sys.stderr.write(f"CRITICAL GPU ERROR: CUDA was detected but initialization failed.\n")
+                sys.stderr.write(f"Error: {e}\n")
+                sys.stderr.write(f"FALLING BACK TO CPU MODE (Performance will be degraded).\n")
+                sys.stderr.write("!" * 80 + "\n\n")
+                
+                providers = ["CPUExecutionProvider"]
+                self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+                self.active_provider = "CPUExecutionProvider"
+                self.device = "cpu"
+        else:
+            providers = ["CPUExecutionProvider"]
+            self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", providers=providers)
+            self.active_provider = "CPUExecutionProvider"
         
         # Metadata storage
         self.metadata_path = self.storage_path / "index_metadata.json"
@@ -63,21 +84,46 @@ class SemanticEngine:
 
     def _has_cuda(self) -> bool:
         """
-        Detect CUDA availability by checking onnxruntime providers.
-        nvidia-smi is irrelevant: a physical GPU doesn't mean onnxruntime-gpu is installed.
+        Detect real CUDA device availability by actually probing the GPU.
+        Uses subprocess to avoid polluting stderr with C++ onnxruntime errors.
         """
         try:
-            import onnxruntime as ort
-            available = ort.get_available_providers()
-            if "CUDAExecutionProvider" in available:
-                print("DEBUG: CUDAExecutionProvider available in onnxruntime")
-                return True
-            print(f"DEBUG: CUDAExecutionProvider not available. Providers: {available}")
-        except ImportError:
-            print("DEBUG: onnxruntime not installed")
-
-        print("DEBUG: Falling back to CPU")
-        return False
+            import subprocess, sys
+            # Run a quick CUDA probe in a subprocess so any C++ stderr stays contained
+            probe = subprocess.run(
+                [sys.executable, "-c", 
+                 "import onnxruntime as ort; "
+                 "s = ort.InferenceSession.__new__(ort.InferenceSession); "
+                 "provs = ort.get_available_providers(); "
+                 "exit(0 if 'CUDAExecutionProvider' in provs else 1)"
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10
+            )
+            if probe.returncode != 0:
+                return False
+            
+            # Verify actual device with a real CUDA call
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "import ctypes, sys; "
+                 "try:\n"
+                 "  cuda = ctypes.CDLL('libcuda.so.1')\n"
+                 "  count = ctypes.c_int(0)\n"
+                 "  r = cuda.cuInit(0)\n"
+                 "  if r != 0: sys.exit(1)\n"
+                 "  r = cuda.cuDeviceGetCount(ctypes.byref(count))\n"
+                 "  sys.exit(0 if r == 0 and count.value > 0 else 1)\n"
+                 "except: sys.exit(1)"
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
 
     def chunk_text(self, text: str, file_path: str, chunk_size: int = 500, overlap: int = 50) -> List[Dict[str, Any]]:
         """Simple chunking with line tracking."""
@@ -147,7 +193,7 @@ class SemanticEngine:
             self._save_metadata()
             
         except Exception as e:
-            print(f"Error indexing {file_path}: {e}")
+            sys.stderr.write(f"Error indexing {file_path}: {e}\n")
 
     def delete_file(self, file_path: str):
         relative_path = os.path.relpath(file_path, os.getcwd())

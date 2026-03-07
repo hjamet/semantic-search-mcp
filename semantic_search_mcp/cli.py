@@ -2,8 +2,11 @@ import typer
 import os
 import json
 from pathlib import Path
+import warnings
 from rich.console import Console
 from rich.progress import Progress
+
+# semantic_search_mcp/cli.py
 from semantic_search_mcp.indexer.engine import SemanticEngine
 from semantic_search_mcp.indexer.watcher import start_watcher
 
@@ -58,7 +61,8 @@ def ensure_gitignore(cwd: str):
 
 @app.command()
 def main(
-    no_web: bool = typer.Option(False, "--no-web", help="Disable the web visualization server")
+    no_web: bool = typer.Option(False, "--no-web", help="Disable the web visualization server"),
+    force_cpu: bool = typer.Option(False, "--force-cpu", help="Force CPU mode even if GPU is available")
 ):
     """Lancer l'indexeur sémantique sur le dossier actuel."""
     cwd = os.getcwd()
@@ -70,7 +74,14 @@ def main(
     # Ensure .gitignore has .semcp
     ensure_gitignore(cwd)
     
-    engine = SemanticEngine(repo_path=cwd)
+    engine = SemanticEngine(repo_path=cwd, force_cpu=force_cpu)
+    
+    # Affichage du statut du moteur
+    if engine.active_provider == "CUDAExecutionProvider":
+        console.print("[bold green]🟢 GPU ACTIF[/] — Utilisation de [cyan]CUDAExecutionProvider[/]")
+    else:
+        status_text = "⚪ CPU MODE" if not force_cpu else "⚪ CPU FORCE"
+        console.print(f"[bold white]{status_text}[/] — Utilisation de [cyan]CPUExecutionProvider[/]")
     
     # 1. Scan initial
     from semantic_search_mcp.constants import ALLOWED_EXTENSIONS, IGNORED_DIRS
@@ -121,9 +132,9 @@ def main(
     if not no_web:
         try:
             from semantic_search_mcp.web.api import start_server
-            console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{WEB_PORT}]http://localhost:{WEB_PORT}[/link]")
+            actual_port = start_server(cwd, engine=engine, port=WEB_PORT)
+            console.print(f"\n[bold cyan]🌐 Graph visualization:[/] [link=http://localhost:{actual_port}]http://localhost:{actual_port}[/link]")
             console.print("[dim]Press Ctrl+C to stop.[/]\n")
-            start_server(cwd, engine=engine, port=WEB_PORT)
         except ImportError as e:
             console.print(f"[yellow]⚠ Web server not available: {e}[/]")
         except Exception as e:

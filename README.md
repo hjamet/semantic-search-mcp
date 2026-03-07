@@ -7,6 +7,8 @@
 - ⚡ Mise à jour temps réel du graphe (WebSocket)
 - 🧠 **Analyseur intelligent** : Support du `TYPE_CHECKING`, imports relatifs complexes et fallbacks (try/except)
 - 🛡️ **Architecture "Zero-Lock"** : Nouveau moteur vectoriel fait maison (numpy/pickle) éliminant définitivement les erreurs de verrouillage.
+- 🛡️ **Flux stdout sécurisé** : Redirection des logs vers stderr pour une communication MCP 100% fiable.
+- 🚀 **Détection GPU Robuste** : Exécution stricte avec isolation subprocess pour éviter toute pollution stderr C++.
 
 ## Installation
 
@@ -117,6 +119,7 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 |----------|-------------|
 | `semcp` | Configure le dossier courant et lance la visualisation web |
 | `semcp --no-web` | Mode sans interface web |
+| `semcp --force-cpu` | Force l'utilisation du CPU (désactive la détection GPU) |
 | `semantic_search_mcp` | Lance le serveur MCP (interne) |
 
 ## Scripts exécutables secondaires & Utilitaires
@@ -147,3 +150,5 @@ Ce projet fournit une interface standardisée pour la recherche sémantique loca
 - [x] [Highlight descendance complète](docs/tasks/highlight_descendants.md) (successeurs transitifs + importeurs directs)
 - [x] [Fix Bruit Watcher & Filtres](docs/tasks/fix_watcher_noise.md) (Centralisation constants.py + support .tex, .sh)
 - [x] [Fix Détection GPU & Install](docs/tasks/fix_gpu_detection.md) (Fallback nvidia-smi + clean install CUDA 12)
+- [x] [Garantie Absolue d'Exécution GPU (Strict Fallback Control)](docs/tasks/strict_gpu_execution.md)
+- [x] [Sécurisation du flux stdout pour MCP (Zero Pollution)](docs/tasks/secure_mcp_stdout.md)
