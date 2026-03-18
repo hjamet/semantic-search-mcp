@@ -13,6 +13,18 @@ class IndexingHandler(FileSystemEventHandler):
         self.engine = engine
         self.ignored_dirs = ignored_dirs or IGNORED_DIRS
 
+    def _is_ignored(self, path: str) -> bool:
+        """Check if a file path should be ignored based on directory and extension rules."""
+        p = Path(path)
+        # Ignore files in ignored directories
+        for part in p.parts:
+            if part in self.ignored_dirs:
+                return True
+        # Ignore files with non-allowed extensions
+        if p.suffix not in ALLOWED_EXTENSIONS:
+            return True
+        return False
+
     def on_modified(self, event):
         if not event.is_directory:
             if self._is_ignored(event.src_path):
